@@ -54,6 +54,8 @@ impl State {
 
 pub type Action = u8;
 
+pub type Reward = f32;
+
 pub type QValue = f32;
 
 #[derive(Clone)]
@@ -96,7 +98,23 @@ pub struct QValues {
 }
 
 impl QValues {
+    pub fn get_mut(&mut self, state: &State, action: &Action) -> Option<&mut ActionQValue> {
+        Some(self.table.get_mut(state)?.get_mut(action)?)
+    }
+
     pub fn get(&self, state: &State, action: &Action) -> Option<ActionQValue> {
         Some(self.table.get(state)?.get(action)?.clone())
     }
+
+    pub fn insert(&mut self, state: State, action: Action, action_q_value: ActionQValue) {
+        self.table.entry(state).or_insert(HashMap::new()).entry(action).or_insert(action_q_value);
+    }
+}
+
+/// ============================================= TRIALS ============================
+
+pub struct Transition {
+    pub state: State,
+    pub action: Action,
+    pub reward: Reward
 }

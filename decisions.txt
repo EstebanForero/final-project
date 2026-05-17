@@ -4,3 +4,11 @@
 2. we are going to implement connect 4 using a bitmap board
 
 3. We are going to implement training in rust
+
+4. We can use minmax, for online policy improvement in inference, together with a CNN, for function approximation, I plan
+to train the CNN, export the weights, and then use them in mojo for inference, to train it we are going to use MCTS for trial
+generation in training
+
+the idea behind this decision, is that minmax, grows exponentially, and it may not reach deep enough to get signals in an
+environment with sparse rewards, with function approximation we will be able to train a ML model, that can generalize
+and output v values, for states that haven't been explored.
