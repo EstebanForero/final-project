@@ -1,2 +1,6 @@
 1. We are going to save the q-values with a fixed-size binary file, loading it directly from python using np.dtype, and np.memmap.
   To solve, we should save q-values, or v-values, and compute in runtime the q values?
+
+2. we are going to implement connect 4 using a bitmap board
+
+3. We are going to implement training in rust
