@@ -1,7 +1,7 @@
 
 use std::{collections::HashMap, fs::File, io::{BufReader, BufWriter, ErrorKind, Read, Write}, thread};
 
-use crate::{connect4::Connect4Env, types::{self, Action, ActionQValue, CurrentState, HEIGHT, Player, QValue, QValues, State, WIDTH}};
+use crate::{connect4::Connect4Env, types::{Action, ActionQValue, CurrentState, HEIGHT, Player, QValue, QValues, State, WIDTH}};
 
 #[derive(Clone, Copy)]
 struct QExportRecord {

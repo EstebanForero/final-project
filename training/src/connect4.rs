@@ -42,7 +42,7 @@ pub struct Connect4Env<const WIDTH: usize, const HEIGHT: usize> {
 impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
     const STRIDE: usize = HEIGHT + 1;
 
-    fn new() -> Connect4Env<WIDTH, HEIGHT> {
+    pub fn new() -> Connect4Env<WIDTH, HEIGHT> {
         Connect4Env {
             player_a_bits: 0,
             player_b_bits: 0,
