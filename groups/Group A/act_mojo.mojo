@@ -13,6 +13,12 @@ def PyInit_act_mojo() -> PythonObject:
         abort(String("error creating Mojo module: ", e))
 
 
-def act(board: PythonObject, rows_obj: PythonObject, cols_obj: PythonObject) raises -> PythonObject:
-    # Temporary test: always center column.
+def act(
+    board: PythonObject,
+    rows_obj: PythonObject,
+    cols_obj: PythonObject,
+    timeout_obj: PythonObject,
+) raises -> PythonObject:
+    # timeout_obj is the total timeout budget for all act calls.
+
     return PythonObject(3)

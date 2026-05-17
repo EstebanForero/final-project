@@ -9,8 +9,9 @@ _THIS_DIR = Path(__file__).resolve().parent
 if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 
-import act_mojo
 import mojo.importer  # noqa: F401
+
+import act_mojo  # isort: skip
 
 
 class Aha(Policy):
@@ -19,4 +20,11 @@ class Aha(Policy):
 
     def act(self, s: np.ndarray) -> int:
         board = np.asarray(s, dtype=np.float32, order="C")
-        return int(act_mojo.act(board, board.shape[0], board.shape[1]))
+        return int(
+            act_mojo.act(
+                board,
+                board.shape[0],
+                board.shape[1],
+                self.timeout,
+            )
+        )
