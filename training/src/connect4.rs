@@ -2,27 +2,7 @@
 // const WIDTH: usize = 7;
 // const STRIDE: usize = HEIGHT + 1; // Bits per column
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Player {
-    A,
-    B,
-}
-
-impl Player {
-    fn other(&self) -> Player {
-        match self {
-            Player::A => Player::B,
-            Player::B => Player::A,
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum CurrentState {
-    Ongoing,
-    Win(Player),
-    Draw
-}
+use crate::types::{CurrentState, Player, State};
 
 /// Our representation for a mask will be the following
 /// 0 | 0 | 0 sentinel bits
@@ -50,7 +30,7 @@ pub enum CurrentState {
 ///
 /// c c3 c2 c1 b b3 b2 b1 a a3 a2 a1
 
-struct Connect4Env<const WIDTH: usize, const HEIGHT: usize> {
+pub struct Connect4Env<const WIDTH: usize, const HEIGHT: usize> {
     player_a_bits: u64,
     player_b_bits: u64,
     mask: u64,
@@ -72,6 +52,10 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
             heights: std::array::from_fn(|col| (col * Self::STRIDE) as u8),
             current_state: CurrentState::Ongoing
         }
+    }
+
+    pub fn get_state(&self) -> State {
+        State::new(self.player_a_bits, self.player_b_bits, self.current_player, self.current_state)
     }
 
     fn top_mask(col: usize) -> u64 {
