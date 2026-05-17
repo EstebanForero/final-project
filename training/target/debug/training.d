@@ -1,1 +1,0 @@
-/home/esteban/Documents/unisabana/seventh_semester/ai_intro/final-project/training/target/debug/training: /home/esteban/Documents/unisabana/seventh_semester/ai_intro/final-project/training/src/connect4.rs /home/esteban/Documents/unisabana/seventh_semester/ai_intro/final-project/training/src/main.rs
