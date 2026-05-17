@@ -66,7 +66,11 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
     }
 
     fn can_play(&self, col: usize) -> bool {
-        col < WIDTH && (self.mask & Self::top_mask(col)) == 0
+        Self::can_play_helper(self.mask, col)
+    }
+
+    fn can_play_helper(mask: u64, col: usize) -> bool {
+        col < WIDTH && (mask & Self::top_mask(col)) == 0
     }
 
     pub fn play_move(&mut self, col: usize) {
@@ -109,7 +113,7 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
                 return;
             }
 
-            if Self::is_board_full(&self) {
+            if Self::is_board_full(self.mask) {
                 self.current_state = CurrentState::Draw
             }
         }
@@ -120,7 +124,7 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
         (pairs & (pairs >> (2 * shift))) != 0
     }
 
-    fn is_win(bits: u64) -> bool {
+    pub fn is_win(bits: u64) -> bool {
         Self::has_four(bits, 1) // Vertical win check (adjacent bits)
         || Self::has_four(bits, Self::STRIDE) // Horizontal win check
         || Self::has_four(bits, Self::STRIDE - 1) // Diagonal win check (/)
@@ -129,12 +133,12 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
     }
 
     /// Check for draw after checking that it isn't a win
-    fn is_board_full(&self) -> bool {
-        (0..WIDTH).all(|col| !self.can_play(col))
+    pub fn is_board_full(mask: u64) -> bool {
+        (0..WIDTH).all(|col| !Self::can_play_helper(mask, col))
     }
 
     pub fn valid_actions(&self) -> Vec<usize> {
-        (0..WIDTH).filter(|col| self.can_play(*col)).collect()
+        (0..WIDTH).filter(|col| Self::can_play_helper(self.mask, *col)).collect()
     }
 }
 

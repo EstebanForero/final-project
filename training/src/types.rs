@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+pub const WIDTH: usize = 7;
+pub const HEIGHT: usize = 6;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Player {
     A,
@@ -39,6 +42,14 @@ impl State {
             current_state
         }
     }
+
+    pub fn get_player_a_bits(&self) -> u64 {
+        self.player_a_bits
+    }
+
+    pub fn get_player_b_bits(&self) -> u64 {
+        self.player_b_bits
+    }
 }
 
 pub type Action = u8;
@@ -58,6 +69,13 @@ impl ActionQValue {
         }
     }
 
+    pub fn from(q_value: QValue, visits: u32) -> Self {
+        Self {
+            q_value,
+            visits
+        }
+    }
+
     pub fn update(&mut self, observed_return: f32) {
         self.visits += 1;
         self.q_value += (observed_return - self.q_value) / self.visits as f32
@@ -66,10 +84,14 @@ impl ActionQValue {
     pub fn get_q_value(&self) -> QValue {
         return self.q_value
     }
+
+    pub fn get_visits(&self) -> u32 {
+        return self.visits
+    }
 }
 
 pub struct QValues {
-    table: HashMap<State, HashMap<Action, ActionQValue>>
+    pub table: HashMap<State, HashMap<Action, ActionQValue>>
 }
 
 
