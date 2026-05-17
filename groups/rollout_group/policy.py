@@ -4,22 +4,20 @@ from connect4.policy import Policy
 from connect4.connect_state import ConnectState
 
 class RolloutAgent(Policy):
-    def __init__(self, num_simulations=50):
+    def __init__(self, num_simulations=40):
+        # 40 simulaciones mantienen al agente rápido y preciso
         self.num_simulations = num_simulations
 
     def mount(self, timeout=None):
-        # Evita el error de Gradescope aceptando cualquier argumento de tiempo
         pass
 
     def _get_active_player(self, board):
-        # Cuenta fichas: si hay empate juega Rojo (-1), si no juega Amarillo (1)
         return -1 if np.count_nonzero(board == -1) == np.count_nonzero(board == 1) else 1
 
     def act(self, s):
         yo = self._get_active_player(s)
         rival = -yo
         
-        # Crear el simulador local para planificar "Online"
         estado_actual = ConnectState(board=s, player=yo)
         columnas_libres = estado_actual.get_free_cols()
         
@@ -28,38 +26,60 @@ class RolloutAgent(Policy):
 
         # --- FILTRO 1: ¿Puedo ganar yo en este turno? ---
         for col in columnas_libres:
-            if estado_actual.transition(col).get_winner() == yo:
-                return col
+            try:
+                if estado_actual.transition(col).get_winner() == yo:
+                    return col
+            except ValueError:
+                continue
 
-        # --- FILTRO 2: ¿El rival ganará en su turno? (¡BLOQUEAR!) ---
-        estado_rival = ConnectState(board=s, player=rival)
-        for col in columnas_libres:
-            if estado_rival.transition(col).get_winner() == rival:
-                return col
+        # --- FILTRO 2: ¿El rival tiene una victoria inmediata? (¡BLOQUEAR!) ---
+        # TRUCO MATEMÁTICO SEGURO: Creamos un tablero "espejo" donde multiplicamos todo por -1.
+        # De esta forma, el rival se convierte en el jugador activo legítimo de ese tablero simulado
+        # sin romper las reglas de inicialización internas del ConnectState de la universidad.
+        try:
+            tablero_espejo = s * -1
+            estado_rival = ConnectState(board=tablero_espejo, player=yo)
+            for col in columnas_libres:
+                try:
+                    # En el espejo, si el jugador activo gana, significa que en la realidad gana el rival
+                    if estado_rival.transition(col).get_winner() == yo:
+                        return col
+                except ValueError:
+                    continue
+        except:
+            pass
 
-        # --- MONTE CARLO ROLLOUTS (Si no hay peligro ni victoria inmediata) ---
+        # --- MONTE CARLO ROLLOUTS (Si la posición es normal) ---
         puntuacion_columnas = {}
 
         for col in columnas_libres:
             utilidad_total = 0.0
             
             for _ in range(self.num_simulations):
-                # Avanzar un paso en la simulación mental
-                sim = estado_actual.transition(col)
+                try:
+                    sim = estado_actual.transition(col)
+                except ValueError:
+                    break
                 
-                # Política por Defecto: Terminar el juego al azar
                 while not sim.is_final():
-                    movimiento_azar = random.choice(sim.get_free_cols())
-                    sim = sim.transition(movimiento_azar)
+                    opciones = sim.get_free_cols()
+                    if not opciones:
+                        break
+                    
+                    try:
+                        sim = sim.transition(random.choice(opciones))
+                    except ValueError:
+                        break
                 
-                # Evaluar el resultado según el Principio de Inversión de Signos
-                if sim.get_winner() == yo:
+                ganador = sim.get_winner()
+                if ganador == yo:
                     utilidad_total += 1.0
-                elif sim.get_winner() == rival:
+                elif ganador == rival:
                     utilidad_total -= 1.0
             
-            # Guardar el valor Q estimado (Promedio de las simulaciones)
             puntuacion_columnas[col] = utilidad_total / self.num_simulations
 
-        # Selección Codiciosa (Greedy): Elegir la columna con mayor Q-valor
+        if not puntuacion_columnas:
+            return columnas_libres[0]
+
         return max(puntuacion_columnas, key=puntuacion_columnas.get)
