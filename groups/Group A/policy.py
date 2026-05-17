@@ -31,13 +31,13 @@ def _load_mojo():
         return _FAST_SUM
 
     except Exception as e:
-        _MOJO_ERROR = e
+        _MOJO_ERROR = repr(e)
         return None
 
 
 class Aha(Policy):
-    def mount(self) -> None:
-        pass
+    def mount(self, timeout=None) -> None:
+        self.timeout = timeout
 
     def act(self, s: np.ndarray) -> int:
         board = np.asarray(s, dtype=np.float32, order="C")
@@ -47,10 +47,8 @@ class Aha(Policy):
             try:
                 return int(mojo_impl.act(board, board.shape[0], board.shape[1]))
             except Exception:
-                # If Mojo compiles but fails at runtime, fallback instead of killing Gradescope.
                 pass
 
-        # Safe NumPy/Python fallback.
         available_cols = [c for c in range(7) if board[0, c] == 0]
 
         if not available_cols:
