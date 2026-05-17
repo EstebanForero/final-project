@@ -159,17 +159,132 @@ mod test {
     use crate::connect4::{Connect4Env, CurrentState, Player};
 
     #[test]
-    fn test_win_checks() {
+    fn test_vertical_win() {
         let mut connect4: Connect4Env<6, 7> = Connect4Env::new();
 
-        connect4.play_move(0);
-        connect4.play_move(1);
-        connect4.play_move(0);
-        connect4.play_move(1);
-        connect4.play_move(0);
-        connect4.play_move(1);
-        connect4.play_move(0);
+        connect4.play_move(0); // A
+        connect4.play_move(1); // B
+        connect4.play_move(0); // A
+        connect4.play_move(1); // B
+        connect4.play_move(0); // A
+        connect4.play_move(1); // B
+        connect4.play_move(0); // A wins vertically
 
-        assert!(connect4.current_state == CurrentState::Win(Player::A))
+        assert!(connect4.current_state == CurrentState::Win(Player::A));
+    }
+
+    #[test]
+    fn test_horizontal_win() {
+        let mut connect4: Connect4Env<6, 7> = Connect4Env::new();
+
+        connect4.play_move(0); // A
+        connect4.play_move(4); // B
+        connect4.play_move(1); // A
+        connect4.play_move(4); // B
+        connect4.play_move(2); // A
+        connect4.play_move(5); // B
+        connect4.play_move(3); // A wins horizontally
+
+        assert!(connect4.current_state == CurrentState::Win(Player::A));
+    }
+
+    #[test]
+    fn test_diagonal_backslash_win() {
+        let mut connect4: Connect4Env<6, 7> = Connect4Env::new();
+
+        // A target diagonal:
+        //
+        // row 3: . . . A
+        // row 2: . . A B
+        // row 1: . A B B
+        // row 0: A B B B
+        //
+        // Coordinates for A: (0,0), (1,1), (2,2), (3,3)
+
+        connect4.play_move(0); // A at col 0, row 0
+        connect4.play_move(1); // B support
+
+        connect4.play_move(1); // A at col 1, row 1
+        connect4.play_move(2); // B support
+
+        connect4.play_move(4); // A filler
+        connect4.play_move(2); // B support
+
+        connect4.play_move(2); // A at col 2, row 2
+        connect4.play_move(3); // B support
+
+        connect4.play_move(5); // A filler
+        connect4.play_move(3); // B support
+
+        connect4.play_move(5); // A filler
+        connect4.play_move(3); // B support
+
+        connect4.play_move(3); // A at col 3, row 3, wins diagonal \
+
+        assert!(connect4.current_state == CurrentState::Win(Player::A));
+    }
+
+    #[test]
+    fn test_diagonal_slash_win() {
+        let mut connect4: Connect4Env<6, 7> = Connect4Env::new();
+
+        // A target diagonal:
+        //
+        // row 3: A . . .
+        // row 2: B A . .
+        // row 1: B B A .
+        // row 0: B B B A
+        //
+        // Coordinates for A: (3,0), (2,1), (1,2), (0,3)
+
+        connect4.play_move(3); // A at col 3, row 0
+        connect4.play_move(2); // B support
+
+        connect4.play_move(2); // A at col 2, row 1
+        connect4.play_move(1); // B support
+
+        connect4.play_move(4); // A filler
+        connect4.play_move(1); // B support
+
+        connect4.play_move(1); // A at col 1, row 2
+        connect4.play_move(0); // B support
+
+        connect4.play_move(5); // A filler
+        connect4.play_move(0); // B support
+
+        connect4.play_move(5); // A filler
+        connect4.play_move(0); // B support
+
+        connect4.play_move(0); // A at col 0, row 3, wins diagonal /
+
+        assert!(connect4.current_state == CurrentState::Win(Player::A));
+    }
+
+    #[test]
+    fn test_valid_actions_removes_full_column() {
+        let mut connect4: Connect4Env<6, 7> = Connect4Env::new();
+
+        for _ in 0..7 {
+            connect4.play_move(0);
+        }
+
+        assert!(!connect4.can_play(0));
+        assert!(!connect4.valid_actions().contains(&0));
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot play move: game is already over")]
+    fn test_cannot_play_after_game_over() {
+        let mut connect4: Connect4Env<6, 7> = Connect4Env::new();
+
+        connect4.play_move(0); // A
+        connect4.play_move(1); // B
+        connect4.play_move(0); // A
+        connect4.play_move(1); // B
+        connect4.play_move(0); // A
+        connect4.play_move(1); // B
+        connect4.play_move(0); // A wins
+
+        connect4.play_move(2); // should panic
     }
 }
