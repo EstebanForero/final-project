@@ -56,6 +56,7 @@ pub type Action = u8;
 
 pub type QValue = f32;
 
+#[derive(Clone)]
 pub struct ActionQValue {
     q_value: QValue,
     visits: u32
@@ -94,4 +95,8 @@ pub struct QValues {
     pub table: HashMap<State, HashMap<Action, ActionQValue>>
 }
 
-
+impl QValues {
+    pub fn get(&self, state: &State, action: &Action) -> Option<ActionQValue> {
+        Some(self.table.get(state)?.get(action)?.clone())
+    }
+}
