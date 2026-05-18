@@ -131,25 +131,42 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
         self.backtracking(expanded_node, arena_tree, q_values, return_in_expanded_node);
     }
 
-    fn backtracking(&self, expanded_node_id: NodeId, arena_tree: &mut ArenaTree, q_values: &mut QValues, expanded_node_return: f32) {
-        let mut current_node = arena_tree.get_node(expanded_node_id);
+    fn backtracking(
+        &self,
+        expanded_node_id: NodeId,
+        arena_tree: &ArenaTree,
+        q_values: &mut QValues,
+        expanded_node_return: f32) {
+
+        let mut current_node_id = expanded_node_id;
 
         loop {
-            if let Some(parent_id) = current_node.parent && let Some(action) = current_node.action_from_parent {
-                let parent_node = arena_tree.get_node(parent_id);
-                if let Some(q_value) = q_values.get_mut(&parent_node.state, &action) {
-                    q_value.update(expanded_node_return);
-                } else {
-                    println!("Creating q value for nde inside the MCTS");
-                    let mut action_q_value = ActionQValue::new();
-                    action_q_value.update(expanded_node_return);
-                    q_values.insert(parent_node.state.clone(), action, action_q_value);
-                }
+            let current_node = arena_tree.get_node(current_node_id);
 
-                current_node = parent_node;
+            let Some(parent_id) = current_node.parent else {
+                return;
+            };
+
+            let Some(action) = current_node.action_from_parent else {
+                return;
+            };
+
+            let parent_node = arena_tree.get_node(parent_id);
+
+            if let Some(q_value) = q_values.get_mut(&parent_node.state, &action) {
+                q_value.update(expanded_node_return);
             } else {
-                return
+                let mut action_q_value = ActionQValue::new();
+                action_q_value.update(expanded_node_return);
+
+                q_values.insert(
+                    parent_node.state.clone(),
+                    action,
+                    action_q_value,
+                );
             }
+
+            current_node_id = parent_id;
         }
     }
 
