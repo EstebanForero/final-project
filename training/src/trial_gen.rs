@@ -1,6 +1,7 @@
 use crate::{alternating_markov_games::SelfPlayEnvironment, policy_improver::{GreedyPolicy, Policy}, types::{QValues, State, Transition}};
 
 
+
 pub trait TrialGenerator {
     fn generate_trial(
         &mut self,

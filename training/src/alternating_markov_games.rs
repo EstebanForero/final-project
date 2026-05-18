@@ -1,4 +1,4 @@
-use crate::{connect4::Connect4Env, policy_improver::Policy, types::{Action, CurrentState, Player, QValues, State}};
+use crate::{connect4::Connect4Env, policy_improver::Policy, types::{self, Action, CurrentState, Player, QValues, State}};
 
 pub struct TransitionResult {
     pub state: State,
@@ -7,7 +7,7 @@ pub struct TransitionResult {
 
 pub struct SelfPlayEnvironment<P> {
     policy: P,
-    connect4: Connect4Env
+    connect4: Connect4Env<{ types::WIDTH }, { types::HEIGHT }>
 } 
 
 impl<P: Policy> SelfPlayEnvironment<P> {
@@ -47,9 +47,9 @@ impl<P: Policy> SelfPlayEnvironment<P> {
             return TransitionResult { state: new_state, reward }
         }
 
-        let other_player_actions = self.connect4.valid_actions().into_iter().map(|x| x as u8).collect();
+        let other_player_actions: Vec<Action> = self.connect4.valid_actions().into_iter().map(|x| x as u8).collect();
 
-        let opponent_action = self.policy.choose_action(&new_state, other_player_actions, q_values);
+        let opponent_action = self.policy.choose_action(&new_state, &other_player_actions, q_values);
 
         self.connect4.play_move(opponent_action as usize);
 
