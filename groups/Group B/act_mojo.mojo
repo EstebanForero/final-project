@@ -6,7 +6,7 @@ from std.os import abort
 comptime WIDTH = 7
 comptime HEIGHT = 6
 comptime STRIDE = HEIGHT + 1
-comptime RECORD_SIZE = 25  # u128 + u8 + f32 + u32
+comptime RECORD_SIZE = 25
 
 
 @export
@@ -34,8 +34,7 @@ def act(
     var encoded_state = EncodedState.from_binary_board(board)
     var q_store = QValueStore.from_file(q_values_path_obj)
 
-    var policy = GreedyPolicy()
-    var action = policy.choose_action(
+    var action = GreedyPolicy.choose_action(
         q_store,
         encoded_state.state_key_current_as_a,
         encoded_state.state_key_current_as_b,
@@ -43,6 +42,57 @@ def act(
     )
 
     return action
+
+
+fn get_q_values_cache() raises -> PythonObject:
+    """
+    Returns a process-wide Python dict used as a cache.
+
+    The cache is stored on Python builtins to avoid needing mutable global Mojo
+    state inside this extension module.
+    """
+    var builtins = Python.import_module("builtins")
+    var cache_name = "_act_mojo_q_values_mmap_cache"
+    var builtins_dict = builtins.__dict__
+
+    if Bool(py=builtins_dict.__contains__(cache_name)):
+        return builtins_dict.__getitem__(cache_name)
+
+    var cache = builtins.dict()
+    builtins_dict.__setitem__(cache_name, value=cache)
+    return cache
+
+
+fn get_cached_q_values_data(path_obj: PythonObject) raises -> PythonObject:
+    """
+    Returns a cached read-only mmap object for the Q-values file.
+
+    This avoids:
+      - reopening the same Q-values file every act(...) call
+      - reading the entire file into a Python bytes object
+      - duplicating the Q-table in memory
+    """
+    var builtins = Python.import_module("builtins")
+    var mmap_module = Python.import_module("mmap")
+
+    var path_key = builtins.str(path_obj)
+    var cache = get_q_values_cache()
+
+    if Bool(py=cache.__contains__(path_key)):
+        return cache.__getitem__(path_key)
+
+    var file = builtins.open(path_obj, "rb")
+
+    var data = mmap_module.mmap(
+        file.fileno(),
+        0,
+        access=mmap_module.ACCESS_READ,
+    )
+
+    file.close()
+
+    cache.__setitem__(path_key, value=data)
+    return data
 
 
 struct BinaryBoard:
@@ -66,31 +116,14 @@ struct BinaryBoard:
         var opponent_bits = UInt64(0)
         var valid_mask = 0
 
-        # A column is valid if its top cell is empty.
-        # Flat board is row-major, so top cell of column col is index col.
+        # Top row is indices 0..6.
+        # If the top cell of a column is empty, that column is playable.
         for col in range(WIDTH):
             var top_value = Float64(py=flat_board.__getitem__(col))
 
             if top_value == 0.0:
                 valid_mask |= 1 << col
 
-        # Rust-compatible bitboard:
-        #
-        # bit_index = col * STRIDE + bit_row
-        #
-        # Python/NumPy board:
-        #   row 0 = top
-        #
-        # Rust bitboard:
-        #   bit_row 0 = bottom
-        #
-        # Therefore:
-        #   bit_row = HEIGHT - 1 - row
-        #
-        # Assumption:
-        #   value > 0  => current player's piece
-        #   value < 0  => opponent's piece
-        #   value == 0 => empty
         for row in range(HEIGHT):
             for col in range(WIDTH):
                 var flat_index = row * WIDTH + col
@@ -125,22 +158,6 @@ struct EncodedState:
 
     @staticmethod
     fn from_binary_board(board: BinaryBoard) -> EncodedState:
-        # Rust encoding:
-        #
-        #   a | (b << 64) | (player << 127)
-        #
-        # Because the tournament board is assumed to be current-player-relative,
-        # we check two equivalent interpretations:
-        #
-        # 1. current player as Rust Player::A:
-        #      A bits = current_player_bits
-        #      B bits = opponent_bits
-        #      current_player = 0
-        #
-        # 2. current player as Rust Player::B:
-        #      A bits = opponent_bits
-        #      B bits = current_player_bits
-        #      current_player = 1
         var key_as_a = encode_state(
             board.current_player_bits,
             board.opponent_bits,
@@ -173,57 +190,142 @@ struct QValueStore:
 
     @staticmethod
     fn from_file(path_obj: PythonObject) raises -> QValueStore:
-        var builtins = Python.import_module("builtins")
-        var file = builtins.open(path_obj, "rb")
-        var data = file.read()
-        file.close()
-
+        var data = get_cached_q_values_data(path_obj)
         var length = Int(py=data.__len__())
+
+        # Python caches imported modules, so this is cheap.
         var struct_module = Python.import_module("struct")
 
         return QValueStore(data, length, struct_module)
 
-    fn lookup(self, target_state_key: UInt128, target_action: UInt8) raises -> Float64:
-        var offset = 0
 
-        while offset + RECORD_SIZE <= self.length:
-            var state_key = read_u128_le(self.data, offset)
-            var action = UInt8(Int(py=self.data.__getitem__(offset + 16)))
+struct ActionQValues:
+    """
+    Fixed-width action Q-value accumulator.
 
-            if state_key == target_state_key and action == target_action:
-                return read_f32_le(self.struct_module, self.data, offset + 17)
+    This is similar in spirit to Rust's [ActionQValue; WIDTH], but avoids
+    building a full HashMap<State, [ActionQValue; WIDTH]> in memory.
 
-            offset += RECORD_SIZE
+    Missing values remain 0.0, matching the behavior of the original lookup(...)
+    method.
+    """
+
+    var seen_mask: Int
+
+    var q0: Float64
+    var q1: Float64
+    var q2: Float64
+    var q3: Float64
+    var q4: Float64
+    var q5: Float64
+    var q6: Float64
+
+    fn __init__(out self):
+        self.seen_mask = 0
+
+        self.q0 = 0.0
+        self.q1 = 0.0
+        self.q2 = 0.0
+        self.q3 = 0.0
+        self.q4 = 0.0
+        self.q5 = 0.0
+        self.q6 = 0.0
+
+    fn update(mut self, action: Int, q: Float64):
+        """
+        Updates the action value.
+
+        If both state encodings match the same action, keep the larger Q-value.
+        This preserves the old policy logic:
+
+            q = max(q_a, q_b)
+        """
+        if (self.seen_mask & (1 << action)) == 0:
+            self.set(action, q)
+            self.seen_mask |= 1 << action
+            return
+
+        if q > self.get(action):
+            self.set(action, q)
+
+    fn get(self, action: Int) -> Float64:
+        if action == 0:
+            return self.q0
+        elif action == 1:
+            return self.q1
+        elif action == 2:
+            return self.q2
+        elif action == 3:
+            return self.q3
+        elif action == 4:
+            return self.q4
+        elif action == 5:
+            return self.q5
+        elif action == 6:
+            return self.q6
 
         return 0.0
 
+    fn set(mut self, action: Int, q: Float64):
+        if action == 0:
+            self.q0 = q
+        elif action == 1:
+            self.q1 = q
+        elif action == 2:
+            self.q2 = q
+        elif action == 3:
+            self.q3 = q
+        elif action == 4:
+            self.q4 = q
+        elif action == 5:
+            self.q5 = q
+        elif action == 6:
+            self.q6 = q
+
 
 struct GreedyPolicy:
-    fn __init__(out self):
-        pass
-
+    @staticmethod
     fn choose_action(
-        self,
         q_store: QValueStore,
         state_key_current_as_a: UInt128,
         state_key_current_as_b: UInt128,
         valid_mask: Int,
     ) raises -> Int:
+        var values = ActionQValues()
+
+        # Scan the Q-values table once.
+        #
+        # The original code called lookup(...) twice per valid action.
+        # Each lookup(...) scanned the whole file, so a full board decision
+        # could scan the Q-table up to 14 times.
+        var offset = 0
+
+        while offset + RECORD_SIZE <= q_store.length:
+            var state_key = read_u128_le(q_store.data, offset)
+
+            if state_key == state_key_current_as_a or state_key == state_key_current_as_b:
+                var action = Int(py=q_store.data.__getitem__(offset + 16))
+
+                if action >= 0 and action < WIDTH:
+                    if (valid_mask & (1 << action)) != 0:
+                        var q = read_f32_le(
+                            q_store.struct_module,
+                            q_store.data,
+                            offset + 17,
+                        )
+
+                        values.update(action, q)
+
+            offset += RECORD_SIZE
+
         var best_action = first_valid_action(valid_mask)
-        var best_q = -1000000000000000000000000000000.0
+        var best_q = values.get(best_action)
 
         for action in range(WIDTH):
             if (valid_mask & (1 << action)) == 0:
                 continue
 
-            var action_u8 = UInt8(action)
-
-            var q_a = q_store.lookup(state_key_current_as_a, action_u8)
-            var q_b = q_store.lookup(state_key_current_as_b, action_u8)
-
-            var q = q_a
-            if q_b > q:
-                q = q_b
+            var q = values.get(action)
 
             if q > best_q:
                 best_q = q
@@ -267,10 +369,5 @@ fn read_f32_le(
     data: PythonObject,
     offset: Int,
 ) raises -> Float64:
-    # Equivalent to Python:
-    #
-    #   struct.unpack_from("<f", data, offset)[0]
-    #
-    # This avoids depending on Mojo bitcast syntax.
     var tuple_value = struct_module.unpack_from("<f", data, offset)
     return Float64(py=tuple_value.__getitem__(0))
