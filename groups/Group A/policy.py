@@ -14,7 +14,8 @@ import mojo.importer  # noqa: F401
 import act_mojo  # isort: skip
 
 
-class Aha(Policy):
+# class Aha(Policy):
+class Aha:
     def mount(self, timeout=None) -> None:
         self.timeout = timeout
 
