@@ -15,6 +15,12 @@ pub struct FirstVisitMonteCarloEvaluator {
     pub gamma: f32
 }
 
+impl FirstVisitMonteCarloEvaluator {
+    pub fn new(gamma: f32) -> Self {
+        Self { gamma }
+    }
+}
+
 impl PolicyTrialEvaluator for FirstVisitMonteCarloEvaluator {
     fn evaluate_trial(
         &self,

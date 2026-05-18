@@ -67,6 +67,12 @@ pub struct UcbPolicy {
     pub exploration_c: f32
 }
 
+impl UcbPolicy {
+    pub fn new(exploration_c: f32) -> Self {
+        Self { exploration_c }
+    }
+}
+
 fn ucb_score(exploration_c: f32, q_value: f32, action_visits: u32, total_visits: u32) -> f32 {
     if action_visits == 0 {
         return f32::INFINITY

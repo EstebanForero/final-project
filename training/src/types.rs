@@ -97,6 +97,7 @@ impl ActionQValue {
     }
 }
 
+#[derive(Clone)]
 pub struct QValues {
     pub table: HashMap<State, HashMap<Action, ActionQValue>>
 }

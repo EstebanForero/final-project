@@ -50,6 +50,10 @@ impl<T: Policy, R: Policy> OnlinePolicyImprovementTrialGenerator<T, R> {
             inner_q_values: global_q_values
         }
     }
+
+    pub fn set_q_values(&mut self, global_q_values: QValues) {
+        self.inner_q_values = global_q_values
+    }
 }
 
 impl<T: Policy, R: Policy> TrialGenerator for OnlinePolicyImprovementTrialGenerator<T, R> {
@@ -128,7 +132,7 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
     }
 
     fn backtracking(&self, expanded_node_id: NodeId, arena_tree: &mut ArenaTree, q_values: &mut QValues, expanded_node_return: f32) {
-        let current_node = arena_tree.get_node(expanded_node_id);
+        let mut current_node = arena_tree.get_node(expanded_node_id);
 
         loop {
             if let Some(parent_id) = current_node.parent && let Some(action) = current_node.action_from_parent {
@@ -141,6 +145,8 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
                     action_q_value.update(expanded_node_return);
                     q_values.insert(parent_node.state.clone(), action, action_q_value);
                 }
+
+                current_node = parent_node;
             } else {
                 return
             }
