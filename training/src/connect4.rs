@@ -184,7 +184,10 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
 
 #[cfg(test)]
 mod test {
-    use crate::connect4::{Connect4Env, CurrentState, Player};
+    use crate::{
+        connect4::{Connect4Env, CurrentState, Player},
+        types::State,
+    };
 
     #[test]
     fn test_vertical_win() {
@@ -314,5 +317,14 @@ mod test {
         connect4.play_move(0); // A wins
 
         connect4.play_move(2); // should panic
+    }
+
+    #[test]
+    #[ignore]
+    fn test_from_state_preserves_terminal_state() {
+        let terminal_state = State::new(0b1111, 0, Player::B, CurrentState::Win(Player::A));
+        let connect4: Connect4Env<7, 6> = Connect4Env::from(terminal_state);
+
+        assert_eq!(connect4.current_state, CurrentState::Win(Player::A));
     }
 }

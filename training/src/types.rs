@@ -114,7 +114,8 @@ impl QValues {
     }
 
     pub fn insert(&mut self, state: State, action: Action, action_q_value: ActionQValue) {
-        let actions = self.table
+        let actions = self
+            .table
             .entry(state)
             .or_insert([ActionQValue::default(); WIDTH]);
 

@@ -19,16 +19,9 @@ fn make_trial_generator(
     let tree_policy = UcbPolicy::new(1.4);
     let rollout_policy = GreedyPolicy::new();
 
-    let montecarlo_tree_search = MonteCarloTreeSearch::new(
-        tree_policy,
-        rollout_policy,
-        500,
-    );
+    let montecarlo_tree_search = MonteCarloTreeSearch::new(tree_policy, rollout_policy, 500);
 
-    OnlinePolicyImprovementTrialGenerator::new(
-        montecarlo_tree_search,
-        q_values,
-    )
+    OnlinePolicyImprovementTrialGenerator::new(montecarlo_tree_search, q_values)
 }
 
 fn main() {
@@ -43,21 +36,19 @@ fn main() {
     for iteration in 0..100_000 {
         let q_snapshot = global_q_values.clone();
 
-        let projected_trials: Vec<(Vec<Transition>, Vec<Transition>)> =
-            (0..BATCH_SIZE)
-                .into_par_iter().map(|_| {
+        let projected_trials: Vec<(Vec<Transition>, Vec<Transition>)> = (0..BATCH_SIZE)
+            .into_par_iter()
+            .map(|_| {
                 let mut trial_generator = make_trial_generator(q_snapshot.clone());
 
-                trial_generator.generate_trial()
-                .project_for_players()
-            }).collect();
-
+                trial_generator.generate_trial().project_for_players()
+            })
+            .collect();
 
         for (trial_player_a, trial_player_b) in projected_trials {
             policy_evaluator.evaluate_trial(&trial_player_a, &mut global_q_values);
             policy_evaluator.evaluate_trial(&trial_player_b, &mut global_q_values);
         }
-        
 
         if iteration % 1000 == 0 && iteration != 0 {
             println!(

@@ -342,3 +342,51 @@ impl MctsNode {
         self.children.iter().map(|(action, _)| *action).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        trial_gen::ProjectedTrial,
+        types::{CurrentState, Player, State, Transition},
+    };
+
+    fn state(player: Player) -> State {
+        State::new(0, 0, player, CurrentState::Ongoing)
+    }
+
+    fn transition(player: Player, action: u8, reward: f32) -> Transition {
+        Transition {
+            state: state(player),
+            action,
+            reward,
+        }
+    }
+
+    #[test]
+    fn project_for_players_keeps_player_a_win_and_player_b_loss() {
+        let trial = vec![
+            transition(Player::A, 0, 0.0),
+            transition(Player::B, 1, 0.0),
+            transition(Player::A, 2, 1.0),
+        ];
+
+        let (player_a, player_b) = trial.project_for_players();
+
+        assert_eq!(player_a.len(), 2);
+        assert_eq!(player_b.len(), 1);
+        assert_eq!(player_a[1].reward, 1.0);
+        assert_eq!(player_b[0].reward, -1.0);
+    }
+
+    #[test]
+    fn project_for_players_keeps_player_b_win_and_player_a_loss() {
+        let trial = vec![transition(Player::A, 0, 0.0), transition(Player::B, 1, 1.0)];
+
+        let (player_a, player_b) = trial.project_for_players();
+
+        assert_eq!(player_a.len(), 1);
+        assert_eq!(player_b.len(), 1);
+        assert_eq!(player_a[0].reward, -1.0);
+        assert_eq!(player_b[0].reward, 1.0);
+    }
+}

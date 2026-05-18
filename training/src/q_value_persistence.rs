@@ -184,3 +184,35 @@ impl QValuePersistence {
         std::fs::rename(&temp_path, &path).expect("Failed to replace q-values file");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        q_value_persistence::{decode_state, encode_state},
+        types::{CurrentState, Player, State},
+    };
+
+    fn roundtrip(state: State) -> State {
+        decode_state(encode_state(&state))
+    }
+
+    #[test]
+    fn test_state_encoding_preserves_player_a_to_move() {
+        let state = State::new(1, 2, Player::A, CurrentState::Ongoing);
+        let decoded = roundtrip(state);
+
+        assert_eq!(decoded.get_player_a_bits(), 1);
+        assert_eq!(decoded.get_player_b_bits(), 2);
+        assert_eq!(decoded.current_player, Player::A);
+    }
+
+    #[test]
+    fn test_state_encoding_preserves_player_b_to_move() {
+        let state = State::new(1, 2, Player::B, CurrentState::Ongoing);
+        let decoded = roundtrip(state);
+
+        assert_eq!(decoded.get_player_a_bits(), 1);
+        assert_eq!(decoded.get_player_b_bits(), 2);
+        assert_eq!(decoded.current_player, Player::B);
+    }
+}
