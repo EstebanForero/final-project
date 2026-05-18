@@ -39,6 +39,42 @@ pub struct Connect4Env<const WIDTH: usize, const HEIGHT: usize> {
     pub current_state: CurrentState
 }
 
+impl<const WIDTH: usize, const HEIGHT: usize> From<State> for Connect4Env<WIDTH, HEIGHT> {
+    fn from(value: State) -> Self {
+        let player_a_bits = value.get_player_a_bits();
+        let player_b_bits = value.get_player_b_bits();
+        let mask = player_a_bits | player_b_bits;
+
+        let heights = std::array::from_fn(|col| {
+            let base = col * Self::STRIDE;
+
+            let mut row = 0;
+
+            while row < HEIGHT {
+                let bit_index = base + row;
+                let bit = 1u64 << bit_index;
+
+                if mask & bit == 0 {
+                    break;
+                }
+
+                row += 1;
+            }
+
+            (base + row) as u8
+        });
+
+        Connect4Env {
+            player_a_bits,
+            player_b_bits,
+            current_player: value.current_player,
+            mask,
+            heights,
+            current_state: CurrentState::Ongoing,
+        }
+    }
+}
+
 impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
     const STRIDE: usize = HEIGHT + 1;
 
