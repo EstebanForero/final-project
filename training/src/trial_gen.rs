@@ -179,7 +179,7 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
 
         loop {
             let valid_actions = self_play_env.valid_actions();
-            if self_play_env.valid_actions().is_empty() {
+            if self_play_env.valid_actions().is_empty() || self_play_env.is_terminal() {
                 return last_reward
             }
 
