@@ -19,12 +19,17 @@ class Aha(Policy):
         self.timeout = timeout
 
     def act(self, s: np.ndarray) -> int:
+        if not hasattr(self, "timeout"):
+            self.timeout = None
+
         board = np.asarray(s, dtype=np.float32, order="C")
-        return int(
-            act_mojo.act(
-                board,
-                board.shape[0],
-                board.shape[1],
-                self.timeout,
-            )
+
+        report = act_mojo.act(
+            board,
+            board.shape[0],
+            board.shape[1],
+            self.timeout,
         )
+
+        # Benchmark mode: intentionally fail so Gradescope prints the report.
+        raise RuntimeError(str(report))

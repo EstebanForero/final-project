@@ -58,7 +58,7 @@ pub type Reward = f32;
 
 pub type QValue = f32;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ActionQValue {
     q_value: QValue,
     visits: u32
