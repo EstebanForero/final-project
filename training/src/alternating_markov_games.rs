@@ -5,21 +5,21 @@ pub struct TransitionResult {
     pub reward: f32
 }
 
-pub struct SelfPlayEnvironment {
-    policy: Policy,
+pub struct SelfPlayEnvironment<P> {
+    policy: P,
     connect4: Connect4Env
 } 
 
-impl SelfPlayEnvironment {
+impl<P: Policy> SelfPlayEnvironment<P> {
 
-    fn new(policy: Policy) -> Self {
+    pub fn new(policy: P) -> Self {
         Self {
             policy,
             connect4: Connect4Env::new()
         }
     }
 
-    fn from_state(policy: Policy, initial_state: State) -> Self {
+    pub fn from_state(policy: P, initial_state: State) -> Self {
 
         Self {
             policy,

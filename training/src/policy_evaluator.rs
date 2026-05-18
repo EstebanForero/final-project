@@ -11,7 +11,7 @@ pub trait PolicyTrialEvaluator {
     );
 }
 
-struct FirstVisitMonteCarloEvaluator {
+pub struct FirstVisitMonteCarloEvaluator {
     pub gamma: f32
 }
 

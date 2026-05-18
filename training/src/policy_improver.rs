@@ -14,6 +14,12 @@ pub trait Policy {
 
 pub struct GreedyPolicy {}
 
+impl GreedyPolicy {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
 impl Policy for GreedyPolicy {
     fn choose_action(
         &self,
