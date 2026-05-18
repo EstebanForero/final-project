@@ -67,7 +67,7 @@ pub type Reward = f32;
 
 pub type QValue = f32;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Default)]
 pub struct ActionQValue {
     q_value: QValue,
     visits: u32,
@@ -101,24 +101,24 @@ impl ActionQValue {
 
 #[derive(Clone)]
 pub struct QValues {
-    pub table: HashMap<State, HashMap<Action, ActionQValue>>,
+    pub table: HashMap<State, [ActionQValue; WIDTH]>,
 }
 
 impl QValues {
     pub fn get_mut(&mut self, state: &State, action: &Action) -> Option<&mut ActionQValue> {
-        Some(self.table.get_mut(state)?.get_mut(action)?)
+        Some(self.table.get_mut(state)?.get_mut(*action as usize)?)
     }
 
     pub fn get(&self, state: &State, action: &Action) -> Option<ActionQValue> {
-        Some(self.table.get(state)?.get(action)?.clone())
+        Some(self.table.get(state)?.get(*action as usize)?.clone())
     }
 
     pub fn insert(&mut self, state: State, action: Action, action_q_value: ActionQValue) {
-        self.table
+        let actions = self.table
             .entry(state)
-            .or_insert(HashMap::new())
-            .entry(action)
-            .or_insert(action_q_value);
+            .or_insert([ActionQValue::default(); WIDTH]);
+
+        actions[action as usize] = action_q_value
     }
 }
 

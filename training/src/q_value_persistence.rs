@@ -63,11 +63,12 @@ fn decode_state(encoded_state: u128) -> State {
 
 fn q_values_to_q_export_record(q_values: QValues) -> Vec<QExportRecord> {
     let mut export_records = Vec::with_capacity(q_values.table.len() * 8);
-    for (state, action_value) in q_values.table {
-        for (action, value) in action_value {
+    for (state, action_values) in q_values.table {
+        for action in 0..WIDTH {
+            let value = action_values[action];
             export_records.push(QExportRecord {
                 state_key: encode_state(&state),
-                action,
+                action: action as u8,
                 q_value: value.get_q_value(),
                 visits: value.get_visits(),
             });
@@ -103,7 +104,7 @@ impl QValuePersistence {
 
         let mut reader = BufReader::new(file);
 
-        let mut q_values = HashMap::<State, HashMap<Action, ActionQValue>>::new();
+        let mut q_values = HashMap::<State, [ActionQValue; WIDTH]>::new();
 
         loop {
             let mut state_key_bytes = [0u8; 16];
@@ -141,10 +142,11 @@ impl QValuePersistence {
             let q_value = QValue::from_le_bytes(q_value_bytes);
             let visits = u32::from_le_bytes(visits_bytes);
 
-            q_values
+            let actions = q_values
                 .entry(state)
-                .or_default()
-                .insert(action, ActionQValue::from(q_value, visits));
+                .or_insert([ActionQValue::default(); WIDTH]);
+
+            actions[action as usize] = ActionQValue::from(q_value, visits);
         }
 
         QValues { table: q_values }
