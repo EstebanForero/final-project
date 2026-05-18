@@ -22,7 +22,7 @@ fn main() {
     let montecarlo_tree_search = MonteCarloTreeSearch::new(
         tree_policy,
         rollout_policy,
-        500,
+        100,
     );
 
     let mut trial_generator = OnlinePolicyImprovementTrialGenerator::new(
@@ -34,7 +34,7 @@ fn main() {
 
     let mut save_handle: Option<JoinHandle<()>> = None;
 
-    for iteration in 0..10_000 {
+    for iteration in 0..100_000 {
         trial_generator.set_q_values(global_q_values.clone());
 
         let trial = trial_generator.generate_trial();
@@ -43,7 +43,7 @@ fn main() {
         policy_evaluator.evaluate_trial(&trial_player_a, &mut global_q_values);
         policy_evaluator.evaluate_trial(&trial_player_b, &mut global_q_values);
 
-        if iteration % 100 == 0 && iteration != 0 {
+        if iteration % 1000 == 0 && iteration != 0 {
             println!(
                 "Iteration: {iteration}\nQValues: {}",
                 global_q_values.table.len()
