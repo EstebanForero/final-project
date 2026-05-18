@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+src/connect4_qnet/__init__.py
+src/connect4_qnet/dataset.py
+src/connect4_qnet/evaluate_generalization.py
+src/connect4_qnet/export_raw.py
+src/connect4_qnet/inspect_qvalues.py
+src/connect4_qnet/model.py
+src/connect4_qnet/train.py
+src/connect4_qnet_training.egg-info/PKG-INFO
+src/connect4_qnet_training.egg-info/SOURCES.txt
+src/connect4_qnet_training.egg-info/dependency_links.txt
+src/connect4_qnet_training.egg-info/entry_points.txt
+src/connect4_qnet_training.egg-info/requires.txt
+src/connect4_qnet_training.egg-info/top_level.txt

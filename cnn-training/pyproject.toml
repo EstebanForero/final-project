@@ -1,0 +1,26 @@
+[project]
+name = "connect4-qnet-training"
+version = "0.1.0"
+description = "Train a Connect 4 CNN Q-network from Rust q_values binary records."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "numpy>=2.1.0",
+    "packaging>=24.0",
+    "safetensors>=0.5.0",
+    "torch>=2.5.0",
+    "tqdm>=4.67.0",
+]
+
+[project.scripts]
+train-connect4-qnet = "connect4_qnet.train:main"
+inspect-connect4-qvalues = "connect4_qnet.inspect_qvalues:main"
+export-connect4-qnet-raw = "connect4_qnet.export_raw:main"
+evaluate-connect4-qnet = "connect4_qnet.evaluate_generalization:main"
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
