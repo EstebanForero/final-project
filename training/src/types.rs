@@ -50,6 +50,10 @@ impl State {
     pub fn get_player_b_bits(&self) -> u64 {
         self.player_b_bits
     }
+
+    pub fn is_terminal(&self) -> bool {
+        self.current_state != CurrentState::Ongoing
+    }
 }
 
 pub type Action = u8;

@@ -71,7 +71,7 @@ impl<P: Policy> SelfPlayEnvironment<P> {
     }
 }
 
-pub fn reward_for_player(state: &State, player: Player) -> f32 {
+fn reward_for_player(state: &State, player: Player) -> f32 {
     match state.current_state {
         CurrentState::Win(winner) if winner == player => 1.0,
         CurrentState::Win(_) => -1.0,

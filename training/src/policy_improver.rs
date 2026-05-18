@@ -3,7 +3,7 @@ use rand::seq::IndexedRandom;
 use crate::types::{Action, ActionQValue, QValues, State};
 
 
-pub trait Policy {
+pub trait Policy: Clone {
     fn choose_action(
         &self,
         state: &State,
@@ -12,6 +12,7 @@ pub trait Policy {
     ) -> Action;
 }
 
+#[derive(Clone)]
 pub struct GreedyPolicy {}
 
 impl GreedyPolicy {
@@ -61,6 +62,7 @@ impl Policy for GreedyPolicy {
     }
 }
 
+#[derive(Clone)]
 pub struct UcbPolicy {
     pub exploration_c: f32
 }
