@@ -36,7 +36,7 @@ pub struct Connect4Env<const WIDTH: usize, const HEIGHT: usize> {
     mask: u64,
     pub current_player: Player,
     heights: [u8; WIDTH],
-    pub current_state: CurrentState
+    pub current_state: CurrentState,
 }
 
 impl<const WIDTH: usize, const HEIGHT: usize> From<State> for Connect4Env<WIDTH, HEIGHT> {
@@ -86,12 +86,17 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
             mask: 0,
             // This is an array that tells us where the next piece will fall in each column
             heights: std::array::from_fn(|col| (col * Self::STRIDE) as u8),
-            current_state: CurrentState::Ongoing
+            current_state: CurrentState::Ongoing,
         }
     }
 
     pub fn get_state(&self) -> State {
-        State::new(self.player_a_bits, self.player_b_bits, self.current_player, self.current_state)
+        State::new(
+            self.player_a_bits,
+            self.player_b_bits,
+            self.current_player,
+            self.current_state,
+        )
     }
 
     fn top_mask(col: usize) -> u64 {
@@ -119,8 +124,6 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
             "Invalid move: column is full or out of bounds"
         );
 
-        
-
         let bit_index = self.heights[col] as usize;
         let bit = 1u64 << bit_index;
 
@@ -143,7 +146,7 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
                 Player::A => self.player_a_bits,
                 Player::B => self.player_b_bits,
             };
-            
+
             if Self::is_win(current_player_bits) {
                 self.current_state = CurrentState::Win(self.current_player);
                 return;
@@ -165,7 +168,6 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
         || Self::has_four(bits, Self::STRIDE) // Horizontal win check
         || Self::has_four(bits, Self::STRIDE - 1) // Diagonal win check (/)
         || Self::has_four(bits, Self::STRIDE + 1) // Diagonal win check (\)
-
     }
 
     /// Check for draw after checking that it isn't a win
@@ -174,7 +176,9 @@ impl<const WIDTH: usize, const HEIGHT: usize> Connect4Env<WIDTH, HEIGHT> {
     }
 
     pub fn valid_actions(&self) -> Vec<usize> {
-        (0..WIDTH).filter(|col| Self::can_play_helper(self.mask, *col)).collect()
+        (0..WIDTH)
+            .filter(|col| Self::can_play_helper(self.mask, *col))
+            .collect()
     }
 }
 

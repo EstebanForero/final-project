@@ -1,11 +1,15 @@
 use std::collections::HashSet;
 
-use crate::{alternating_markov_games::{SelfPlayEnvironment, reward_for_player}, connect4::Connect4Env, policy_improver::{GreedyPolicy, Policy}, types::{self, Action, ActionQValue, Player, QValues, State, Transition}};
+use crate::{
+    alternating_markov_games::{SelfPlayEnvironment, reward_for_player},
+    connect4::Connect4Env,
+    policy_improver::Policy,
+    types::{self, Action, ActionQValue, Player, QValues, State, Transition},
+};
 
 pub trait ProjectedTrial {
     fn project_for_players(&self) -> (Vec<Transition>, Vec<Transition>);
 }
-
 
 impl ProjectedTrial for Vec<Transition> {
     fn project_for_players(&self) -> (Vec<Transition>, Vec<Transition>) {
@@ -21,10 +25,14 @@ impl ProjectedTrial for Vec<Transition> {
 
         let last = self.last().expect("Trial shouldn't be empty");
         if last.state.current_player == Player::A {
-            player_b_trial.last_mut().expect("Trial player b shouldn't be empty")
-            .reward = -last.reward;
+            player_b_trial
+                .last_mut()
+                .expect("Trial player b shouldn't be empty")
+                .reward = -last.reward;
         } else {
-            player_a_trial.last_mut().expect("Trial player a shouldn't be empty")
+            player_a_trial
+                .last_mut()
+                .expect("Trial player a shouldn't be empty")
                 .reward = -last.reward;
         }
 
@@ -33,21 +41,19 @@ impl ProjectedTrial for Vec<Transition> {
 }
 
 pub trait TrialGenerator {
-    fn generate_trial(
-        &mut self,
-    ) -> Vec<Transition>;
+    fn generate_trial(&mut self) -> Vec<Transition>;
 }
 
 pub struct OnlinePolicyImprovementTrialGenerator<T, R> {
     local_search: MonteCarloTreeSearch<T, R>,
-    inner_q_values: QValues
+    inner_q_values: QValues,
 }
 
 impl<T: Policy, R: Policy> OnlinePolicyImprovementTrialGenerator<T, R> {
     pub fn new(local_search: MonteCarloTreeSearch<T, R>, global_q_values: QValues) -> Self {
         Self {
             local_search,
-            inner_q_values: global_q_values
+            inner_q_values: global_q_values,
         }
     }
 
@@ -57,30 +63,32 @@ impl<T: Policy, R: Policy> OnlinePolicyImprovementTrialGenerator<T, R> {
 }
 
 impl<T: Policy, R: Policy> TrialGenerator for OnlinePolicyImprovementTrialGenerator<T, R> {
-
-    fn generate_trial(
-        &mut self,
-    ) -> Vec<Transition> {
+    fn generate_trial(&mut self) -> Vec<Transition> {
         let mut connect4_environment = Connect4Env::<{ types::WIDTH }, { types::HEIGHT }>::new();
 
         let mut transitions = Vec::new();
-
 
         loop {
             let current_state = connect4_environment.get_state();
 
             if current_state.is_terminal() {
-                break
+                break;
             }
 
-            let action = self.local_search.select_best_action(current_state.clone(), &mut self.inner_q_values);
+            let action = self
+                .local_search
+                .select_best_action(current_state.clone(), &mut self.inner_q_values);
             connect4_environment.play_move(action as usize);
 
             let next_state = connect4_environment.get_state();
             let player = connect4_environment.current_player.other();
             let reward_current_player = reward_for_player(&next_state, player);
 
-            transitions.push(Transition { state: current_state, action, reward: reward_current_player});
+            transitions.push(Transition {
+                state: current_state,
+                action,
+                reward: reward_current_player,
+            });
         }
 
         transitions
@@ -90,7 +98,7 @@ impl<T: Policy, R: Policy> TrialGenerator for OnlinePolicyImprovementTrialGenera
 pub struct MonteCarloTreeSearch<T, R> {
     tree_policy: T,
     rollout_policy: R,
-    simulation_budget: usize
+    simulation_budget: usize,
 }
 
 impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
@@ -98,12 +106,13 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
         Self {
             tree_policy,
             rollout_policy,
-            simulation_budget
+            simulation_budget,
         }
     }
 
     pub fn select_best_action(&mut self, root_state: State, q_values: &mut QValues) -> Action {
-        let self_play_env = SelfPlayEnvironment::from_state(self.rollout_policy.clone(), root_state);
+        let self_play_env =
+            SelfPlayEnvironment::from_state(self.rollout_policy.clone(), root_state);
 
         let root_state = self_play_env.get_current_state();
         let root_valid_actions = self_play_env.valid_actions();
@@ -114,14 +123,15 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
             self.run_simulation(&mut arena_tree, q_values);
         }
 
-        self.tree_policy.choose_action(&root_state, &root_valid_actions, q_values)
+        self.tree_policy
+            .choose_action(&root_state, &root_valid_actions, q_values)
     }
 
     fn run_simulation(&self, arena_tree: &mut ArenaTree, q_values: &mut QValues) {
         let selected_node = self.selection(arena_tree, q_values);
 
         if arena_tree.get_node(selected_node).state.is_terminal() {
-            return
+            return;
         }
 
         let expanded_node = self.expansion(selected_node, arena_tree, q_values);
@@ -136,8 +146,8 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
         expanded_node_id: NodeId,
         arena_tree: &ArenaTree,
         q_values: &mut QValues,
-        expanded_node_return: f32) {
-
+        expanded_node_return: f32,
+    ) {
         let mut current_node_id = expanded_node_id;
 
         loop {
@@ -159,65 +169,85 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
                 let mut action_q_value = ActionQValue::new();
                 action_q_value.update(expanded_node_return);
 
-                q_values.insert(
-                    parent_node.state.clone(),
-                    action,
-                    action_q_value,
-                );
+                q_values.insert(parent_node.state.clone(), action, action_q_value);
             }
 
             current_node_id = parent_id;
         }
     }
 
-    fn rollout(&self, expanded_node_id: NodeId, arena_tree: &mut ArenaTree, q_values: &QValues) -> f32 {
-
+    fn rollout(
+        &self,
+        expanded_node_id: NodeId,
+        arena_tree: &mut ArenaTree,
+        q_values: &QValues,
+    ) -> f32 {
         let expanded_node = arena_tree.get_node(expanded_node_id);
 
-        let mut self_play_env = SelfPlayEnvironment::from_state(self.rollout_policy.clone(), expanded_node.state.clone());
+        let mut self_play_env = SelfPlayEnvironment::from_state(
+            self.rollout_policy.clone(),
+            expanded_node.state.clone(),
+        );
         let mut last_reward = 0.;
 
         loop {
             let valid_actions = self_play_env.valid_actions();
             if self_play_env.valid_actions().is_empty() || self_play_env.is_terminal() {
-                return last_reward
+                return last_reward;
             }
 
             let current_state = self_play_env.get_current_state();
-            let action = self.rollout_policy.choose_action(&current_state, &valid_actions, q_values);
+            let action =
+                self.rollout_policy
+                    .choose_action(&current_state, &valid_actions, q_values);
             let transition_result = self_play_env.transition(action, q_values);
             last_reward = transition_result.reward;
         }
-        
     }
 
-    fn expansion(&self, selected_node_id: NodeId, arena_tree: &mut ArenaTree, q_values: &QValues) -> NodeId {
+    fn expansion(
+        &self,
+        selected_node_id: NodeId,
+        arena_tree: &mut ArenaTree,
+        q_values: &QValues,
+    ) -> NodeId {
         let selected_node = arena_tree.get_node(selected_node_id);
         let action = selected_node.untried_actions.iter().next()
             .expect("It shouldn't fail since we checked that there were untried actions in the selected node, and terminal state check should be done outside of expansion");
 
-        let mut self_play_env = SelfPlayEnvironment::from_state(self.rollout_policy.clone(), selected_node.state.clone());
+        let mut self_play_env = SelfPlayEnvironment::from_state(
+            self.rollout_policy.clone(),
+            selected_node.state.clone(),
+        );
         let result = self_play_env.transition(*action, q_values);
 
-        arena_tree.add_child(selected_node_id, *action, result.state, self_play_env.valid_actions())
+        arena_tree.add_child(
+            selected_node_id,
+            *action,
+            result.state,
+            self_play_env.valid_actions(),
+        )
     }
-    
+
     fn selection(&self, arena_tree: &ArenaTree, q_values: &QValues) -> NodeId {
         let mut current_node_id = arena_tree.root;
 
         loop {
             let current_node = arena_tree.get_node(current_node_id);
             if !current_node.untried_actions.is_empty() || current_node.children.is_empty() {
-                return current_node_id
+                return current_node_id;
             }
 
-            let action = self.tree_policy.choose_action(&current_node.state, &current_node.get_child_actions(), q_values);
+            let action = self.tree_policy.choose_action(
+                &current_node.state,
+                &current_node.get_child_actions(),
+                q_values,
+            );
 
-            current_node_id = arena_tree.get_child_for_action(current_node_id, action)
+            current_node_id = arena_tree
+                .get_child_for_action(current_node_id, action)
                 .expect("It should always exist");
-
         }
-
     }
 }
 
@@ -225,7 +255,7 @@ type NodeId = usize;
 
 pub struct ArenaTree {
     tree: Vec<MctsNode>,
-    root: NodeId
+    root: NodeId,
 }
 
 impl ArenaTree {
@@ -236,12 +266,12 @@ impl ArenaTree {
             action_from_parent: None,
 
             children: Vec::new(),
-            untried_actions: HashSet::from_iter(root_valid_actions.into_iter())
+            untried_actions: HashSet::from_iter(root_valid_actions.into_iter()),
         };
 
         Self {
             tree: vec![root_node],
-            root: 0
+            root: 0,
         }
     }
 
@@ -254,7 +284,7 @@ impl ArenaTree {
         self.tree[new_root_id].parent = None;
         self.tree[new_root_id].action_from_parent = None;
     }
-    
+
     pub fn get_node(&self, node_id: NodeId) -> &MctsNode {
         &self.tree[node_id]
     }
@@ -271,7 +301,13 @@ impl ArenaTree {
         &mut self.tree[node_id]
     }
 
-    pub fn add_child(&mut self, parent_id: NodeId, action: Action, child_state: State, child_valid_actions: Vec<Action>) -> NodeId {
+    pub fn add_child(
+        &mut self,
+        parent_id: NodeId,
+        action: Action,
+        child_state: State,
+        child_valid_actions: Vec<Action>,
+    ) -> NodeId {
         let child_id = self.tree.len();
 
         let child_node = MctsNode {
@@ -280,7 +316,7 @@ impl ArenaTree {
             action_from_parent: Some(action),
 
             children: Vec::new(),
-            untried_actions: HashSet::from_iter(child_valid_actions.into_iter())
+            untried_actions: HashSet::from_iter(child_valid_actions.into_iter()),
         };
 
         self.tree.push(child_node);

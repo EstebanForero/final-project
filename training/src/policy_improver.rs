@@ -2,14 +2,8 @@ use rand::seq::IndexedRandom;
 
 use crate::types::{Action, ActionQValue, QValues, State};
 
-
 pub trait Policy: Clone {
-    fn choose_action(
-        &self,
-        state: &State,
-        valid_actions: &[Action],
-        q_values: &QValues,
-    ) -> Action;
+    fn choose_action(&self, state: &State, valid_actions: &[Action], q_values: &QValues) -> Action;
 }
 
 #[derive(Clone)]
@@ -22,12 +16,7 @@ impl GreedyPolicy {
 }
 
 impl Policy for GreedyPolicy {
-    fn choose_action(
-        &self,
-        state: &State,
-        valid_actions: &[Action],
-        q_values: &QValues,
-    ) -> Action {
+    fn choose_action(&self, state: &State, valid_actions: &[Action], q_values: &QValues) -> Action {
         assert!(
             !valid_actions.is_empty(),
             "GreedyPolicy cannot choose action: no valid actions available"
@@ -36,11 +25,12 @@ impl Policy for GreedyPolicy {
         let best_q = valid_actions
             .iter()
             .copied()
-            .map(|action| q_values
-                .get(state, &action)
-                .unwrap_or(ActionQValue::new())
-                .get_q_value()
-            )
+            .map(|action| {
+                q_values
+                    .get(state, &action)
+                    .unwrap_or(ActionQValue::new())
+                    .get_q_value()
+            })
             .max_by(|a, b| a.total_cmp(b))
             .unwrap();
 
@@ -64,7 +54,7 @@ impl Policy for GreedyPolicy {
 
 #[derive(Clone)]
 pub struct UcbPolicy {
-    pub exploration_c: f32
+    pub exploration_c: f32,
 }
 
 impl UcbPolicy {
@@ -75,7 +65,7 @@ impl UcbPolicy {
 
 fn ucb_score(exploration_c: f32, q_value: f32, action_visits: u32, total_visits: u32) -> f32 {
     if action_visits == 0 {
-        return f32::INFINITY
+        return f32::INFINITY;
     }
 
     let total_visits = total_visits as f32;
@@ -84,12 +74,7 @@ fn ucb_score(exploration_c: f32, q_value: f32, action_visits: u32, total_visits:
 }
 
 impl Policy for UcbPolicy {
-    fn choose_action(
-        &self,
-        state: &State,
-        valid_actions: &[Action],
-        q_values: &QValues,
-    ) -> Action {
+    fn choose_action(&self, state: &State, valid_actions: &[Action], q_values: &QValues) -> Action {
         assert!(
             !valid_actions.is_empty(),
             "UcbPolicy cannot choose action: no valid actions available"

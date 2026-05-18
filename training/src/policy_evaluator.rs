@@ -2,17 +2,12 @@ use std::collections::HashSet;
 
 use crate::types::{ActionQValue, QValues, Transition};
 
-
 pub trait PolicyTrialEvaluator {
-    fn evaluate_trial(
-        &self,
-        trial: &[Transition],
-        q_values: &mut QValues
-    );
+    fn evaluate_trial(&self, trial: &[Transition], q_values: &mut QValues);
 }
 
 pub struct FirstVisitMonteCarloEvaluator {
-    pub gamma: f32
+    pub gamma: f32,
 }
 
 impl FirstVisitMonteCarloEvaluator {
@@ -22,11 +17,7 @@ impl FirstVisitMonteCarloEvaluator {
 }
 
 impl PolicyTrialEvaluator for FirstVisitMonteCarloEvaluator {
-    fn evaluate_trial(
-        &self,
-        trial: &[Transition],
-        q_values: &mut QValues
-    ) {
+    fn evaluate_trial(&self, trial: &[Transition], q_values: &mut QValues) {
         let mut u = trial[trial.len() - 1].reward;
 
         let mut trial_visited = HashSet::with_capacity(44);
@@ -39,14 +30,15 @@ impl PolicyTrialEvaluator for FirstVisitMonteCarloEvaluator {
             u = self.gamma * u + reward;
 
             if trial_visited.contains(&(state.clone(), action)) {
-                continue
+                continue;
             }
 
             if let None = q_values.get(&state, &action) {
                 q_values.insert(state.clone(), action, ActionQValue::new());
             }
 
-            q_values.get_mut(&state, &action)
+            q_values
+                .get_mut(&state, &action)
                 .expect("Unrechable point")
                 .update(u);
 

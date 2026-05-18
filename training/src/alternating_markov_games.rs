@@ -1,29 +1,31 @@
-use crate::{connect4::Connect4Env, policy_improver::Policy, types::{self, Action, CurrentState, Player, QValues, State}};
+use crate::{
+    connect4::Connect4Env,
+    policy_improver::Policy,
+    types::{self, Action, CurrentState, Player, QValues, State},
+};
 
 pub struct TransitionResult {
     pub state: State,
-    pub reward: f32
+    pub reward: f32,
 }
 
 pub struct SelfPlayEnvironment<P> {
     policy: P,
-    connect4: Connect4Env<{ types::WIDTH }, { types::HEIGHT }>
-} 
+    connect4: Connect4Env<{ types::WIDTH }, { types::HEIGHT }>,
+}
 
 impl<P: Policy> SelfPlayEnvironment<P> {
-
     pub fn new(policy: P) -> Self {
         Self {
             policy,
-            connect4: Connect4Env::new()
+            connect4: Connect4Env::new(),
         }
     }
 
     pub fn from_state(policy: P, initial_state: State) -> Self {
-
         Self {
             policy,
-            connect4: Connect4Env::from(initial_state)
+            connect4: Connect4Env::from(initial_state),
         }
     }
 
@@ -32,14 +34,14 @@ impl<P: Policy> SelfPlayEnvironment<P> {
     }
 
     pub fn valid_actions(&self) -> Vec<Action> {
-        self.connect4.valid_actions().into_iter().map(|action| action as u8).collect()
+        self.connect4
+            .valid_actions()
+            .into_iter()
+            .map(|action| action as u8)
+            .collect()
     }
 
-    pub fn transition(
-        &mut self,
-        action: Action,
-        q_values: &QValues
-    ) -> TransitionResult {
+    pub fn transition(&mut self, action: Action, q_values: &QValues) -> TransitionResult {
         let current_player = self.connect4.current_player;
 
         self.connect4.play_move(action as usize);
@@ -48,26 +50,37 @@ impl<P: Policy> SelfPlayEnvironment<P> {
         if new_state.current_state != CurrentState::Ongoing {
             let reward = reward_for_player(&new_state, current_player);
 
-            return TransitionResult { state: new_state, reward }
+            return TransitionResult {
+                state: new_state,
+                reward,
+            };
         }
 
-        let other_player_actions: Vec<Action> = self.connect4.valid_actions().into_iter().map(|x| x as u8).collect();
+        let other_player_actions: Vec<Action> = self
+            .connect4
+            .valid_actions()
+            .into_iter()
+            .map(|x| x as u8)
+            .collect();
 
-        let opponent_action = self.policy.choose_action(&new_state, &other_player_actions, q_values);
+        let opponent_action =
+            self.policy
+                .choose_action(&new_state, &other_player_actions, q_values);
 
         self.connect4.play_move(opponent_action as usize);
 
         let new_state = self.connect4.get_state();
 
-
         let reward = reward_for_player(&new_state, current_player);
 
-        TransitionResult { state: new_state, reward: reward }
-
+        TransitionResult {
+            state: new_state,
+            reward: reward,
         }
+    }
 
     pub fn is_terminal(&self) -> bool {
-        self.connect4.current_state!= CurrentState::Ongoing
+        self.connect4.current_state != CurrentState::Ongoing
     }
 }
 

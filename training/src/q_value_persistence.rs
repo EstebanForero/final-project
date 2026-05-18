@@ -1,7 +1,14 @@
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufReader, BufWriter, ErrorKind, Read, Write},
+    thread,
+};
 
-use std::{collections::HashMap, fs::File, io::{BufReader, BufWriter, ErrorKind, Read, Write}, thread};
-
-use crate::{connect4::Connect4Env, types::{Action, ActionQValue, CurrentState, HEIGHT, Player, QValue, QValues, State, WIDTH}};
+use crate::{
+    connect4::Connect4Env,
+    types::{Action, ActionQValue, CurrentState, HEIGHT, Player, QValue, QValues, State, WIDTH},
+};
 
 #[derive(Clone, Copy)]
 struct QExportRecord {
@@ -26,7 +33,6 @@ fn encode_state(state: &State) -> u128 {
     };
 
     a | (b << 64) | (player << 127)
-
 }
 
 fn decode_state(encoded_state: u128) -> State {
@@ -36,7 +42,7 @@ fn decode_state(encoded_state: u128) -> State {
 
     let player_bit = (encoded_state >> 127) & 1;
 
-    let current_player =  match player_bit {
+    let current_player = match player_bit {
         0 => Player::A,
         1 => Player::B,
         _ => unreachable!(),
@@ -63,7 +69,7 @@ fn q_values_to_q_export_record(q_values: QValues) -> Vec<QExportRecord> {
                 state_key: encode_state(&state),
                 action,
                 q_value: value.get_q_value(),
-                visits: value.get_visits()
+                visits: value.get_visits(),
             });
         }
     }
@@ -72,23 +78,19 @@ fn q_values_to_q_export_record(q_values: QValues) -> Vec<QExportRecord> {
 }
 
 pub struct QValuePersistence {
-    path: String
+    path: String,
 }
 
 impl QValuePersistence {
     pub fn new(path: String) -> Self {
-
         if !std::path::Path::new(&path).exists() {
-            File::create(&path)
-            .expect("Failed to create q-values first");
+            File::create(&path).expect("Failed to create q-values first");
         }
 
-        Self {
-            path
-        }
-    } 
+        Self { path }
+    }
 
-    pub fn save_q_values_background(&self, q_values: QValues) -> thread::JoinHandle<()>{
+    pub fn save_q_values_background(&self, q_values: QValues) -> thread::JoinHandle<()> {
         let path = self.path.clone();
 
         thread::spawn(move || {
@@ -97,8 +99,7 @@ impl QValuePersistence {
     }
 
     pub fn load_q_values(&self) -> QValues {
-        let file = File::open(&self.path)
-            .expect("Failed to open q-values file");
+        let file = File::open(&self.path).expect("Failed to open q-values file");
 
         let mut reader = BufReader::new(file);
 
@@ -140,12 +141,13 @@ impl QValuePersistence {
             let q_value = QValue::from_le_bytes(q_value_bytes);
             let visits = u32::from_le_bytes(visits_bytes);
 
-            q_values.entry(state).or_default().insert(action, ActionQValue::from(q_value, visits));
+            q_values
+                .entry(state)
+                .or_default()
+                .insert(action, ActionQValue::from(q_value, visits));
         }
 
-        QValues {
-            table: q_values
-        }
+        QValues { table: q_values }
     }
 
     fn save_q_values_blocking(path: String, q_values: QValues) {
@@ -153,16 +155,17 @@ impl QValuePersistence {
 
         let temp_path = format!("{path}.tmp");
 
-        let file = File::create(&temp_path)
-            .expect("Failed to create temporal q-values file");
+        let file = File::create(&temp_path).expect("Failed to create temporal q-values file");
 
         let mut writer = BufWriter::new(file);
 
         for record in export_records {
-            writer.write_all(&record.state_key.to_le_bytes())
+            writer
+                .write_all(&record.state_key.to_le_bytes())
                 .expect("Failed to write state key");
 
-            writer.write_all(&[record.action])
+            writer
+                .write_all(&[record.action])
                 .expect("Failed to write state key");
 
             writer
@@ -172,13 +175,10 @@ impl QValuePersistence {
             writer
                 .write_all(&record.visits.to_le_bytes())
                 .expect("Failed to write visits");
-                
         }
 
-        writer.flush()
-            .expect("Failed to write q-values file");
+        writer.flush().expect("Failed to write q-values file");
 
-        std::fs::rename(&temp_path, &path)
-            .expect("Failed to replace q-values file");
+        std::fs::rename(&temp_path, &path).expect("Failed to replace q-values file");
     }
 }

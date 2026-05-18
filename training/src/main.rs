@@ -1,15 +1,12 @@
 use std::thread::JoinHandle;
 
-use crate::{policy_evaluator::{FirstVisitMonteCarloEvaluator, PolicyTrialEvaluator}, policy_improver::{GreedyPolicy, UcbPolicy}, q_value_persistence::QValuePersistence, trial_gen::{MonteCarloTreeSearch, OnlinePolicyImprovementTrialGenerator, TrialGenerator}};
-use crate::trial_gen::ProjectedTrial;
-
-pub mod connect4;
-pub mod types;
-pub mod q_value_persistence;
-pub mod policy_evaluator;
-pub mod policy_improver;
-pub mod trial_gen;
-pub mod alternating_markov_games;
+use training::trial_gen::ProjectedTrial;
+use training::{
+    policy_evaluator::{FirstVisitMonteCarloEvaluator, PolicyTrialEvaluator},
+    policy_improver::{GreedyPolicy, UcbPolicy},
+    q_value_persistence::QValuePersistence,
+    trial_gen::{MonteCarloTreeSearch, OnlinePolicyImprovementTrialGenerator, TrialGenerator},
+};
 
 fn main() {
     let q_value_persistence = QValuePersistence::new("./q_values".into());
@@ -19,16 +16,10 @@ fn main() {
     let tree_policy = UcbPolicy::new(1.4);
     let rollout_policy = GreedyPolicy::new();
 
-    let montecarlo_tree_search = MonteCarloTreeSearch::new(
-        tree_policy,
-        rollout_policy,
-        100,
-    );
+    let montecarlo_tree_search = MonteCarloTreeSearch::new(tree_policy, rollout_policy, 100);
 
-    let mut trial_generator = OnlinePolicyImprovementTrialGenerator::new(
-        montecarlo_tree_search,
-        global_q_values.clone(),
-    );
+    let mut trial_generator =
+        OnlinePolicyImprovementTrialGenerator::new(montecarlo_tree_search, global_q_values.clone());
 
     let policy_evaluator = FirstVisitMonteCarloEvaluator::new(1.0);
 
@@ -57,16 +48,13 @@ fn main() {
                     .expect("Previous q-values save thread panicked");
             }
 
-            save_handle = Some(
-                q_value_persistence.save_q_values_background(global_q_values.clone())
-            );
+            save_handle =
+                Some(q_value_persistence.save_q_values_background(global_q_values.clone()));
         }
     }
 
     if let Some(handle) = save_handle {
-        handle
-            .join()
-            .expect("Final q-values save thread panicked");
+        handle.join().expect("Final q-values save thread panicked");
     }
 
     q_value_persistence

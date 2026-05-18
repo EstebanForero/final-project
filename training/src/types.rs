@@ -3,7 +3,7 @@ use std::collections::HashMap;
 pub const WIDTH: usize = 7;
 pub const HEIGHT: usize = 6;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Player {
     A,
     B,
@@ -18,28 +18,33 @@ impl Player {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CurrentState {
     Ongoing,
     Win(Player),
-    Draw
+    Draw,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct State {
     player_a_bits: u64,
     player_b_bits: u64,
     pub current_player: Player,
-    pub current_state: CurrentState
+    pub current_state: CurrentState,
 }
 
 impl State {
-    pub fn new(player_a_bits: u64, player_b_bits: u64, current_player: Player, current_state: CurrentState) -> Self {
+    pub fn new(
+        player_a_bits: u64,
+        player_b_bits: u64,
+        current_player: Player,
+        current_state: CurrentState,
+    ) -> Self {
         Self {
             player_a_bits,
             player_b_bits,
             current_player,
-            current_state
+            current_state,
         }
     }
 
@@ -65,22 +70,19 @@ pub type QValue = f32;
 #[derive(Clone, Default)]
 pub struct ActionQValue {
     q_value: QValue,
-    visits: u32
+    visits: u32,
 }
 
 impl ActionQValue {
     pub fn new() -> Self {
         Self {
             q_value: 0.0,
-            visits: 0
+            visits: 0,
         }
     }
 
     pub fn from(q_value: QValue, visits: u32) -> Self {
-        Self {
-            q_value,
-            visits
-        }
+        Self { q_value, visits }
     }
 
     pub fn update(&mut self, observed_return: f32) {
@@ -89,17 +91,17 @@ impl ActionQValue {
     }
 
     pub fn get_q_value(&self) -> QValue {
-        return self.q_value
+        return self.q_value;
     }
 
     pub fn get_visits(&self) -> u32 {
-        return self.visits
+        return self.visits;
     }
 }
 
 #[derive(Clone)]
 pub struct QValues {
-    pub table: HashMap<State, HashMap<Action, ActionQValue>>
+    pub table: HashMap<State, HashMap<Action, ActionQValue>>,
 }
 
 impl QValues {
@@ -112,7 +114,11 @@ impl QValues {
     }
 
     pub fn insert(&mut self, state: State, action: Action, action_q_value: ActionQValue) {
-        self.table.entry(state).or_insert(HashMap::new()).entry(action).or_insert(action_q_value);
+        self.table
+            .entry(state)
+            .or_insert(HashMap::new())
+            .entry(action)
+            .or_insert(action_q_value);
     }
 }
 
@@ -122,5 +128,5 @@ impl QValues {
 pub struct Transition {
     pub state: State,
     pub action: Action,
-    pub reward: Reward
+    pub reward: Reward,
 }
