@@ -76,6 +76,18 @@ pub struct QValuePersistence {
 }
 
 impl QValuePersistence {
+    pub fn new(path: String) -> Self {
+
+        if !std::path::Path::new(&path).exists() {
+            File::create(&path)
+            .expect("Failed to create q-values first");
+        }
+
+        Self {
+            path
+        }
+    } 
+
     pub fn save_q_values_background(&self, q_values: QValues) -> thread::JoinHandle<()>{
         let path = self.path.clone();
 

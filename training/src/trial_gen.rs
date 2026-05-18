@@ -1,6 +1,36 @@
 use std::collections::HashSet;
 
-use crate::{alternating_markov_games::{SelfPlayEnvironment, reward_for_player}, connect4::Connect4Env, policy_improver::{GreedyPolicy, Policy}, types::{self, Action, ActionQValue, QValues, State, Transition}};
+use crate::{alternating_markov_games::{SelfPlayEnvironment, reward_for_player}, connect4::Connect4Env, policy_improver::{GreedyPolicy, Policy}, types::{self, Action, ActionQValue, Player, QValues, State, Transition}};
+
+pub trait ProjectedTrial {
+    fn project_for_players(&self) -> (Vec<Transition>, Vec<Transition>);
+}
+
+
+impl ProjectedTrial for Vec<Transition> {
+    fn project_for_players(&self) -> (Vec<Transition>, Vec<Transition>) {
+        let mut player_a_trial = Vec::new();
+        let mut player_b_trial = Vec::new();
+
+        for transition in self {
+            match transition.state.current_player {
+                Player::A => player_a_trial.push(transition.clone()),
+                Player::B => player_b_trial.push(transition.clone()),
+            }
+        }
+
+        let last = self.last().expect("Trial shouldn't be empty");
+        if last.state.current_player == Player::A {
+            player_b_trial.last_mut().expect("Trial player b shouldn't be empty")
+            .reward = -last.reward;
+        } else {
+            player_a_trial.last_mut().expect("Trial player a shouldn't be empty")
+                .reward = -last.reward;
+        }
+
+        (player_a_trial, player_b_trial)
+    }
+}
 
 pub trait TrialGenerator {
     fn generate_trial(

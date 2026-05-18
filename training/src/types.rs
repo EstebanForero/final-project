@@ -117,6 +117,7 @@ impl QValues {
 
 /// ============================================= TRIALS ============================
 
+#[derive(Clone)]
 pub struct Transition {
     pub state: State,
     pub action: Action,
