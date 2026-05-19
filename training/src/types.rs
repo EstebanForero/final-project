@@ -105,6 +105,12 @@ pub struct QValues {
 }
 
 impl QValues {
+    pub fn new() -> Self {
+        Self {
+            table: HashMap::new(),
+        }
+    }
+
     pub fn get_mut(&mut self, state: &State, action: &Action) -> Option<&mut ActionQValue> {
         Some(self.table.get_mut(state)?.get_mut(*action as usize)?)
     }
@@ -120,6 +126,90 @@ impl QValues {
             .or_insert([ActionQValue::default(); WIDTH]);
 
         actions[action as usize] = action_q_value
+    }
+}
+
+impl Default for QValues {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub trait QValueStoreRead {
+    fn get(&self, state: &State, action: &Action) -> Option<ActionQValue>;
+}
+
+pub trait QValueStoreWrite: QValueStoreRead {
+    fn get_mut_or_insert(&mut self, state: &State, action: &Action) -> &mut ActionQValue;
+
+    fn update(&mut self, state: &State, action: &Action, observed_return: f32) {
+        self.get_mut_or_insert(state, action)
+            .update(observed_return);
+    }
+}
+
+impl QValueStoreRead for QValues {
+    fn get(&self, state: &State, action: &Action) -> Option<ActionQValue> {
+        QValues::get(self, state, action)
+    }
+}
+
+impl QValueStoreWrite for QValues {
+    fn get_mut_or_insert(&mut self, state: &State, action: &Action) -> &mut ActionQValue {
+        if self.get(state, action).is_none() {
+            self.insert(state.clone(), *action, ActionQValue::new());
+        }
+
+        self.get_mut(state, action)
+            .expect("Value was inserted into Q-values")
+    }
+}
+
+pub struct QValuesOverlay<'a> {
+    global: &'a QValues,
+    local: QValues,
+}
+
+impl<'a> QValuesOverlay<'a> {
+    pub fn new(global: &'a QValues) -> Self {
+        Self {
+            global,
+            local: QValues::new(),
+        }
+    }
+
+    pub fn local(&self) -> &QValues {
+        &self.local
+    }
+
+    pub fn into_local(self) -> QValues {
+        self.local
+    }
+}
+
+impl<'a> QValueStoreRead for QValuesOverlay<'a> {
+    fn get(&self, state: &State, action: &Action) -> Option<ActionQValue> {
+        if let Some(local_value) = self.local.get(state, action) {
+            return Some(local_value);
+        }
+
+        self.global.get(state, action)
+    }
+}
+
+impl<'a> QValueStoreWrite for QValuesOverlay<'a> {
+    fn get_mut_or_insert(&mut self, state: &State, action: &Action) -> &mut ActionQValue {
+        if self.local.get(state, action).is_none() {
+            let initial_value = self
+                .global
+                .get(state, action)
+                .unwrap_or_else(ActionQValue::new);
+            self.local.insert(state.clone(), *action, initial_value);
+        }
+
+        self.local
+            .get_mut(state, action)
+            .expect("Value was inserted into local Q-values")
     }
 }
 

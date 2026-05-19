@@ -1,9 +1,11 @@
 use rand::seq::IndexedRandom;
 
-use crate::types::{Action, ActionQValue, QValues, State};
+use crate::types::{Action, ActionQValue, QValueStoreRead, State};
 
 pub trait Policy: Clone {
-    fn choose_action(&self, state: &State, valid_actions: &[Action], q_values: &QValues) -> Action;
+    fn choose_action<Q>(&self, state: &State, valid_actions: &[Action], q_values: &Q) -> Action
+    where
+        Q: QValueStoreRead;
 }
 
 #[derive(Clone)]
@@ -16,7 +18,10 @@ impl GreedyPolicy {
 }
 
 impl Policy for GreedyPolicy {
-    fn choose_action(&self, state: &State, valid_actions: &[Action], q_values: &QValues) -> Action {
+    fn choose_action<Q>(&self, state: &State, valid_actions: &[Action], q_values: &Q) -> Action
+    where
+        Q: QValueStoreRead,
+    {
         assert!(
             !valid_actions.is_empty(),
             "GreedyPolicy cannot choose action: no valid actions available"
@@ -74,7 +79,10 @@ fn ucb_score(exploration_c: f32, q_value: f32, action_visits: u32, total_visits:
 }
 
 impl Policy for UcbPolicy {
-    fn choose_action(&self, state: &State, valid_actions: &[Action], q_values: &QValues) -> Action {
+    fn choose_action<Q>(&self, state: &State, valid_actions: &[Action], q_values: &Q) -> Action
+    where
+        Q: QValueStoreRead,
+    {
         assert!(
             !valid_actions.is_empty(),
             "UcbPolicy cannot choose action: no valid actions available"

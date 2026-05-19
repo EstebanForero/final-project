@@ -4,7 +4,10 @@ use crate::{
     alternating_markov_games::{SelfPlayEnvironment, reward_for_player},
     connect4::Connect4Env,
     policy_improver::Policy,
-    types::{self, Action, ActionQValue, Player, QValues, State, Transition},
+    types::{
+        self, Action, Player, QValueStoreRead, QValueStoreWrite, QValues, QValuesOverlay, State,
+        Transition,
+    },
 };
 
 pub trait ProjectedTrial {
@@ -41,29 +44,22 @@ impl ProjectedTrial for Vec<Transition> {
 }
 
 pub trait TrialGenerator {
-    fn generate_trial(&mut self) -> Vec<Transition>;
+    fn generate_trial(&mut self, global_q_values: &QValues) -> Vec<Transition>;
 }
 
 pub struct OnlinePolicyImprovementTrialGenerator<T, R> {
     local_search: MonteCarloTreeSearch<T, R>,
-    inner_q_values: QValues,
 }
 
 impl<T: Policy, R: Policy> OnlinePolicyImprovementTrialGenerator<T, R> {
-    pub fn new(local_search: MonteCarloTreeSearch<T, R>, global_q_values: QValues) -> Self {
-        Self {
-            local_search,
-            inner_q_values: global_q_values,
-        }
-    }
-
-    pub fn set_q_values(&mut self, global_q_values: QValues) {
-        self.inner_q_values = global_q_values
+    pub fn new(local_search: MonteCarloTreeSearch<T, R>) -> Self {
+        Self { local_search }
     }
 }
 
 impl<T: Policy, R: Policy> TrialGenerator for OnlinePolicyImprovementTrialGenerator<T, R> {
-    fn generate_trial(&mut self) -> Vec<Transition> {
+    fn generate_trial(&mut self, global_q_values: &QValues) -> Vec<Transition> {
+        let mut q_values = QValuesOverlay::new(global_q_values);
         let mut connect4_environment = Connect4Env::<{ types::WIDTH }, { types::HEIGHT }>::new();
 
         let mut transitions = Vec::new();
@@ -77,7 +73,7 @@ impl<T: Policy, R: Policy> TrialGenerator for OnlinePolicyImprovementTrialGenera
 
             let action = self
                 .local_search
-                .select_best_action(current_state.clone(), &mut self.inner_q_values);
+                .select_best_action(current_state.clone(), &mut q_values);
             connect4_environment.play_move(action as usize);
 
             let next_state = connect4_environment.get_state();
@@ -110,7 +106,10 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
         }
     }
 
-    pub fn select_best_action(&mut self, root_state: State, q_values: &mut QValues) -> Action {
+    pub fn select_best_action<Q>(&mut self, root_state: State, q_values: &mut Q) -> Action
+    where
+        Q: QValueStoreWrite,
+    {
         let self_play_env =
             SelfPlayEnvironment::from_state(self.rollout_policy.clone(), root_state);
 
@@ -127,7 +126,10 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
             .choose_action(&root_state, &root_valid_actions, q_values)
     }
 
-    fn run_simulation(&self, arena_tree: &mut ArenaTree, q_values: &mut QValues) {
+    fn run_simulation<Q>(&self, arena_tree: &mut ArenaTree, q_values: &mut Q)
+    where
+        Q: QValueStoreWrite,
+    {
         let selected_node = self.selection(arena_tree, q_values);
 
         if arena_tree.get_node(selected_node).state.is_terminal() {
@@ -141,13 +143,15 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
         self.backtracking(expanded_node, arena_tree, q_values, return_in_expanded_node);
     }
 
-    fn backtracking(
+    fn backtracking<Q>(
         &self,
         expanded_node_id: NodeId,
         arena_tree: &ArenaTree,
-        q_values: &mut QValues,
+        q_values: &mut Q,
         expanded_node_return: f32,
-    ) {
+    ) where
+        Q: QValueStoreWrite,
+    {
         let mut current_node_id = expanded_node_id;
 
         loop {
@@ -163,25 +167,16 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
 
             let parent_node = arena_tree.get_node(parent_id);
 
-            if let Some(q_value) = q_values.get_mut(&parent_node.state, &action) {
-                q_value.update(expanded_node_return);
-            } else {
-                let mut action_q_value = ActionQValue::new();
-                action_q_value.update(expanded_node_return);
-
-                q_values.insert(parent_node.state.clone(), action, action_q_value);
-            }
+            q_values.update(&parent_node.state, &action, expanded_node_return);
 
             current_node_id = parent_id;
         }
     }
 
-    fn rollout(
-        &self,
-        expanded_node_id: NodeId,
-        arena_tree: &mut ArenaTree,
-        q_values: &QValues,
-    ) -> f32 {
+    fn rollout<Q>(&self, expanded_node_id: NodeId, arena_tree: &mut ArenaTree, q_values: &Q) -> f32
+    where
+        Q: QValueStoreRead,
+    {
         let expanded_node = arena_tree.get_node(expanded_node_id);
 
         let mut self_play_env = SelfPlayEnvironment::from_state(
@@ -205,12 +200,15 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
         }
     }
 
-    fn expansion(
+    fn expansion<Q>(
         &self,
         selected_node_id: NodeId,
         arena_tree: &mut ArenaTree,
-        q_values: &QValues,
-    ) -> NodeId {
+        q_values: &Q,
+    ) -> NodeId
+    where
+        Q: QValueStoreRead,
+    {
         let selected_node = arena_tree.get_node(selected_node_id);
         let action = selected_node.untried_actions.iter().next()
             .expect("It shouldn't fail since we checked that there were untried actions in the selected node, and terminal state check should be done outside of expansion");
@@ -229,7 +227,10 @@ impl<T: Policy, R: Policy> MonteCarloTreeSearch<T, R> {
         )
     }
 
-    fn selection(&self, arena_tree: &ArenaTree, q_values: &QValues) -> NodeId {
+    fn selection<Q>(&self, arena_tree: &ArenaTree, q_values: &Q) -> NodeId
+    where
+        Q: QValueStoreRead,
+    {
         let mut current_node_id = arena_tree.root;
 
         loop {

@@ -110,7 +110,7 @@ def get_cached_model_bytes(path_obj: PythonObject) raises -> PythonObject:
 # Board representation
 # -----------------------------------------------------------------------------
 
-struct BinaryBoard:
+struct BinaryBoard(ImplicitlyCopyable):
     var current_player_bits: UInt64
     var opponent_bits: UInt64
     var mask: UInt64
@@ -247,7 +247,7 @@ def has_won(bits: UInt64) -> Bool:
 # Model weights
 # -----------------------------------------------------------------------------
 
-struct CnnWeights:
+struct CnnWeights(Movable):
     var values: List[Float64]
 
     def __init__(out self, var values: List[Float64]):
@@ -314,7 +314,7 @@ struct CnnWeights:
 # Small fixed-size vector containers
 # -----------------------------------------------------------------------------
 
-struct QValues7:
+struct QValues7(ImplicitlyCopyable):
     var q0: Float64
     var q1: Float64
     var q2: Float64
@@ -371,7 +371,7 @@ struct QValues7:
 # CNN evaluator
 # -----------------------------------------------------------------------------
 
-struct CnnEvaluator:
+struct CnnEvaluator(Movable):
     var weights: CnnWeights
 
     def __init__(out self, var weights: CnnWeights):
@@ -410,7 +410,7 @@ struct CnnEvaluator:
 
             q.set(action, tanh_approx(sum))
 
-        return q^
+        return q
 
 
 def encode_board(board: BinaryBoard, mut input: List[Float64]):
@@ -518,6 +518,8 @@ struct NegamaxSearch:
 
         var best_action = first_valid_action(board.valid_mask)
         var best_score = -999999.0
+        var alpha = -999999.0
+        var beta = 999999.0
 
         for i in range(WIDTH):
             var action = move_order(i)
@@ -527,17 +529,23 @@ struct NegamaxSearch:
 
             var child = board.play(action)
 
+            if has_won(child.opponent_bits):
+                return action
+
             var score = -NegamaxSearch.negamax(
                 child,
                 evaluator,
                 depth - 1,
-                -999999.0,
-                999999.0,
+                -beta,
+                -alpha,
             )
 
             if score > best_score:
                 best_score = score
                 best_action = action
+
+            if score > alpha:
+                alpha = score
 
         return best_action
 
@@ -588,13 +596,16 @@ struct NegamaxSearch:
 
             var child = board.play(action)
 
-            var score = -NegamaxSearch.negamax(
-                child,
-                evaluator,
-                depth - 1,
-                -beta,
-                -alpha,
-            )
+            var score = 1.0
+
+            if not has_won(child.opponent_bits):
+                score = -NegamaxSearch.negamax(
+                    child,
+                    evaluator,
+                    depth - 1,
+                    -beta,
+                    -alpha,
+                )
 
             if score > best:
                 best = score

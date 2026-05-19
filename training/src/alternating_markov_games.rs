@@ -1,7 +1,7 @@
 use crate::{
     connect4::Connect4Env,
     policy_improver::Policy,
-    types::{self, Action, CurrentState, Player, QValues, State},
+    types::{self, Action, CurrentState, Player, QValueStoreRead, State},
 };
 
 pub struct TransitionResult {
@@ -41,7 +41,10 @@ impl<P: Policy> SelfPlayEnvironment<P> {
             .collect()
     }
 
-    pub fn transition(&mut self, action: Action, q_values: &QValues) -> TransitionResult {
+    pub fn transition<Q>(&mut self, action: Action, q_values: &Q) -> TransitionResult
+    where
+        Q: QValueStoreRead,
+    {
         let current_player = self.connect4.current_player;
 
         self.connect4.play_move(action as usize);

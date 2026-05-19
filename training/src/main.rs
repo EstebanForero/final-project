@@ -3,7 +3,7 @@ use std::thread::JoinHandle;
 use rayon::prelude::*;
 
 use training::trial_gen::ProjectedTrial;
-use training::types::{QValues, Transition};
+use training::types::Transition;
 use training::{
     policy_evaluator::{FirstVisitMonteCarloEvaluator, PolicyTrialEvaluator},
     policy_improver::{GreedyPolicy, UcbPolicy},
@@ -13,15 +13,13 @@ use training::{
 
 const BATCH_SIZE: usize = 8;
 
-fn make_trial_generator(
-    q_values: QValues,
-) -> OnlinePolicyImprovementTrialGenerator<UcbPolicy, GreedyPolicy> {
+fn make_trial_generator() -> OnlinePolicyImprovementTrialGenerator<UcbPolicy, GreedyPolicy> {
     let tree_policy = UcbPolicy::new(1.4);
     let rollout_policy = GreedyPolicy::new();
 
-    let montecarlo_tree_search = MonteCarloTreeSearch::new(tree_policy, rollout_policy, 500);
+    let montecarlo_tree_search = MonteCarloTreeSearch::new(tree_policy, rollout_policy, 100);
 
-    OnlinePolicyImprovementTrialGenerator::new(montecarlo_tree_search, q_values)
+    OnlinePolicyImprovementTrialGenerator::new(montecarlo_tree_search)
 }
 
 fn main() {
@@ -34,14 +32,14 @@ fn main() {
     let mut save_handle: Option<JoinHandle<()>> = None;
 
     for iteration in 0..100_000 {
-        let q_snapshot = global_q_values.clone();
-
         let projected_trials: Vec<(Vec<Transition>, Vec<Transition>)> = (0..BATCH_SIZE)
             .into_par_iter()
             .map(|_| {
-                let mut trial_generator = make_trial_generator(q_snapshot.clone());
+                let mut trial_generator = make_trial_generator();
 
-                trial_generator.generate_trial().project_for_players()
+                trial_generator
+                    .generate_trial(&global_q_values)
+                    .project_for_players()
             })
             .collect();
 
