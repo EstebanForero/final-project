@@ -6,7 +6,7 @@ from pathlib import Path
 
 import torch
 from safetensors.torch import save_file
-from torch.utils.data import DataLoader, Subset, random_split
+from torch.utils.data import DataLoader, Dataset, Subset, random_split
 from tqdm import tqdm
 
 from .dataset import QValuesDataset
@@ -75,6 +75,63 @@ def make_loader(dataset, batch_size: int, shuffle: bool, num_workers: int, devic
     )
 
 
+def build_splits(
+    dataset: QValuesDataset,
+    *,
+    val_fraction: float,
+    split_mode: str,
+    seed: int,
+) -> tuple[Dataset, Dataset | None]:
+    if val_fraction <= 0:
+        return dataset, None
+
+    if split_mode == "state":
+        train_indices, val_indices = state_split_indices(dataset, val_fraction=val_fraction, seed=seed)
+        train_set = Subset(dataset, train_indices)
+        val_set = Subset(dataset, val_indices)
+        print(f"split=state train_samples={len(train_set)} val_samples={len(val_set)}")
+    else:
+        val_size = int(len(dataset) * val_fraction)
+        train_size = len(dataset) - val_size
+        train_set, val_set = random_split(
+            dataset, [train_size, val_size], generator=torch.Generator().manual_seed(seed)
+        )
+        print(f"split=random train_samples={len(train_set)} val_samples={len(val_set)}")
+
+    return train_set, val_set
+
+
+def train_one_epoch(
+    model: Connect4QNet,
+    loader: DataLoader,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    epoch: int,
+    total_epochs: int,
+) -> float:
+    model.train()
+    total_loss = 0.0
+
+    progress = tqdm(loader, desc=f"epoch {epoch}/{total_epochs}", unit="batch")
+    for x, y, mask, visits in progress:
+        x = x.to(device, non_blocking=True)
+        y = y.to(device, non_blocking=True)
+        mask = mask.to(device, non_blocking=True)
+        visits = visits.to(device, non_blocking=True)
+
+        pred = model(x)
+        loss = masked_weighted_mse(pred, y, mask, visits)
+
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        progress.set_postfix(loss=f"{loss.item():.5f}")
+
+    return total_loss / max(len(loader), 1)
+
+
 def evaluate(
     model: Connect4QNet,
     loader: DataLoader,
@@ -82,7 +139,6 @@ def evaluate(
 ) -> float:
     model.eval()
     total_loss = 0.0
-    total_batches = 0
 
     with torch.no_grad():
         for x, y, mask, visits in loader:
@@ -92,11 +148,9 @@ def evaluate(
             visits = visits.to(device, non_blocking=True)
 
             pred = model(x)
-            loss = masked_weighted_mse(pred, y, mask, visits)
-            total_loss += loss.item()
-            total_batches += 1
+            total_loss += masked_weighted_mse(pred, y, mask, visits).item()
 
-    return total_loss / max(total_batches, 1)
+    return total_loss / max(len(loader), 1)
 
 
 def train(args: argparse.Namespace) -> None:
@@ -109,94 +163,26 @@ def train(args: argparse.Namespace) -> None:
         device_name = torch.cuda.get_device_name(device)
     else:
         device_name = str(device)
-
     print(f"device={device} ({device_name})")
 
-    dataset = QValuesDataset(
-        args.q_values,
-        min_visits=args.min_visits,
-        max_samples=args.max_samples,
-    )
+    dataset = QValuesDataset(args.q_values, min_visits=args.min_visits, max_samples=args.max_samples)
     print(f"samples={len(dataset)}")
 
-    if args.split_mode == "state" and args.val_fraction > 0:
-        train_indices, val_indices = state_split_indices(
-            dataset,
-            val_fraction=args.val_fraction,
-            seed=args.seed,
-        )
-        train_set = Subset(dataset, train_indices)
-        val_set = Subset(dataset, val_indices)
-        print(
-            f"split=state train_samples={len(train_set)} "
-            f"val_samples={len(val_set)}"
-        )
-    elif args.val_fraction > 0:
-        val_size = int(len(dataset) * args.val_fraction)
-        train_size = len(dataset) - val_size
-        train_set, val_set = random_split(
-            dataset,
-            [train_size, val_size],
-            generator=torch.Generator().manual_seed(args.seed),
-        )
-        print(
-            f"split=random train_samples={len(train_set)} "
-            f"val_samples={len(val_set)}"
-        )
-    else:
-        train_set = dataset
-        val_set = None
+    train_set, val_set = build_splits(
+        dataset,
+        val_fraction=args.val_fraction,
+        split_mode=args.split_mode,
+        seed=args.seed,
+    )
 
-    train_loader = make_loader(
-        train_set,
-        args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-        device=device,
-    )
-    val_loader = (
-        make_loader(
-            val_set,
-            args.batch_size,
-            shuffle=False,
-            num_workers=args.num_workers,
-            device=device,
-        )
-        if val_set is not None
-        else None
-    )
+    train_loader = make_loader(train_set, args.batch_size, shuffle=True, num_workers=args.num_workers, device=device)
+    val_loader = make_loader(val_set, args.batch_size, shuffle=False, num_workers=args.num_workers, device=device) if val_set is not None else None
 
     model = Connect4QNet().to(device)
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=args.lr,
-        weight_decay=args.weight_decay,
-    )
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     for epoch in range(1, args.epochs + 1):
-        model.train()
-        total_loss = 0.0
-        total_batches = 0
-
-        progress = tqdm(train_loader, desc=f"epoch {epoch}/{args.epochs}", unit="batch")
-        for x, y, mask, visits in progress:
-            x = x.to(device, non_blocking=True)
-            y = y.to(device, non_blocking=True)
-            mask = mask.to(device, non_blocking=True)
-            visits = visits.to(device, non_blocking=True)
-
-            pred = model(x)
-            loss = masked_weighted_mse(pred, y, mask, visits)
-
-            optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            optimizer.step()
-
-            total_loss += loss.item()
-            total_batches += 1
-            progress.set_postfix(loss=f"{loss.item():.5f}")
-
-        train_loss = total_loss / max(total_batches, 1)
+        train_loss = train_one_epoch(model, train_loader, optimizer, device, epoch, args.epochs)
         if val_loader is not None:
             val_loss = evaluate(model, val_loader, device)
             print(f"epoch={epoch} train_loss={train_loss:.6f} val_loss={val_loss:.6f}")
@@ -210,8 +196,7 @@ def train(args: argparse.Namespace) -> None:
     print(f"saved={output}")
 
     if args.raw_output:
-        raw_output = Path(args.raw_output)
-        export_state_dict_raw(state_dict, raw_output)
+        export_state_dict_raw(state_dict, Path(args.raw_output))
 
 
 def build_parser() -> argparse.ArgumentParser:

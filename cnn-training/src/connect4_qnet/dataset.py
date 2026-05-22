@@ -13,6 +13,9 @@ HEIGHT = 6
 STRIDE = HEIGHT + 1
 RECORD_SIZE = 16 + 1 + 4 + 4
 
+# Binary layout per record: 16-byte state key | 1-byte action | f32 q_value | u32 visits
+_RECORD_FMT = struct.Struct("<16sBfI")
+
 
 def decode_state_key(state_key: int) -> tuple[int, int, int]:
     player_a_bits = state_key & ((1 << 64) - 1)
@@ -80,31 +83,15 @@ class QValuesDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor, tor
         records: list[QValueRecord] = []
         with self.path.open("rb") as f:
             with mmap.mmap(f.fileno(), length=0, access=mmap.ACCESS_READ) as data:
-                total = size // RECORD_SIZE
-
-                for index in range(total):
-                    offset = index * RECORD_SIZE
-                    state_key = int.from_bytes(
-                        data[offset : offset + 16],
-                        byteorder="little",
-                        signed=False,
-                    )
-                    offset += 16
-
-                    action = data[offset]
-                    offset += 1
-
-                    q_value = struct.unpack_from("<f", data, offset)[0]
-                    offset += 4
-
-                    visits = struct.unpack_from("<I", data, offset)[0]
-
+                for state_bytes, action, q_value, visits in _RECORD_FMT.iter_unpack(data):
                     if visits < self.min_visits:
                         continue
                     if self.validate_actions and action >= WIDTH:
                         continue
 
+                    state_key = int.from_bytes(state_bytes, "little")
                     records.append(QValueRecord(state_key, action, q_value, visits))
+
                     if self.max_samples is not None and len(records) >= self.max_samples:
                         break
 

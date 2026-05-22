@@ -19,6 +19,23 @@ channel 1 = opponent's pieces
 shape = [2, 6, 7]
 ```
 
+## Quick start for Group C (Mojo)
+
+The Mojo file (`groups/Group C/act_cnn_mojo.mojo`) reads raw weights from `connect4_qnet.bin`.
+Training already produces this file automatically, so the full workflow is:
+
+```bash
+# 1. Train (outputs connect4_qnet.safetensors and connect4_qnet.bin)
+uv run train-connect4-qnet --q-values q_values
+
+# 2. Copy the raw weights to the Group C folder
+cp connect4_qnet.bin "../groups/Group C/connect4_qnet.bin"
+```
+
+That's it — no separate export step needed.
+
+---
+
 ## Inspect the data
 
 ```bash

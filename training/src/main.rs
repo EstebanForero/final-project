@@ -48,7 +48,7 @@ fn main() {
             policy_evaluator.evaluate_trial(&trial_player_b, &mut global_q_values);
         }
 
-        if iteration % 5_000 == 0 && iteration != 0 {
+        if iteration % 20_000 == 0 && iteration != 0 {
             println!(
                 "Iteration: {iteration}\nQValues: {}",
                 global_q_values.table.len()
