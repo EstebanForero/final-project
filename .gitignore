@@ -5,3 +5,5 @@ target/
 # Python cache
 __pycache__/
 *.pyc
+
+q_values
