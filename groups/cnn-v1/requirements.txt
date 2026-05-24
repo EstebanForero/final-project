@@ -1,1 +1,0 @@
-mojo --extra-index-url https://modular.gateway.scarf.sh/simple/
