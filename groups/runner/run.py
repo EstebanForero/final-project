@@ -426,14 +426,18 @@ def main() -> None:
                         help="Save plot to this path instead of displaying it")
     parser.add_argument("--quiet", action="store_true",
                         help="Print only the final summary (no per-game lines)")
+    parser.add_argument(
+        "--solution", type=str, default="my-solution",
+        help="Subfolder name inside groups/ to use as the solution (default: my-solution)",
+    )
     args = parser.parse_args()
 
     if args.games % 2 != 0:
         print(f"[warn] --games {args.games} is odd; one side will play one more game as Red.")
 
     groups = ROOT / "groups"
-    print(f"\nLoading my-solution ...")
-    my_cls = load_policy_class(groups / "my-solution" / "policy.py")
+    print(f"\nLoading {args.solution} ...")
+    my_cls = load_policy_class(groups / args.solution / "policy.py")
     print(f"  → {my_cls.__name__}")
 
     print("Loading Group B ...")
@@ -470,9 +474,9 @@ def main() -> None:
         opp_cls   = make_opp_cls(opp_base, args.difficulty)
         opp_label = opp_cls.__name__
 
-        print(f"Running {args.games} games  (my-solution vs {opp_label})")
-        print(f"  Games 1,3,5,…  → my-solution plays as Red   (1st mover)")
-        print(f"  Games 2,4,6,…  → my-solution plays as Yellow (2nd mover)\n")
+        print(f"Running {args.games} games  ({args.solution} vs {opp_label})")
+        print(f"  Games 1,3,5,…  → {args.solution} plays as Red   (1st mover)")
+        print(f"  Games 2,4,6,…  → {args.solution} plays as Yellow (2nd mover)\n")
 
         t0 = time.perf_counter()
         records = run_series(my_cls, opp_cls, args.games, verbose=not args.quiet)
@@ -483,8 +487,8 @@ def main() -> None:
         if not args.no_plots:
             save_path = args.save_plot
             if save_path is None:
-                save_path = Path(__file__).parent / f"results_d{args.difficulty}.png"
-            plot_single(records, f"my-solution vs {opp_label}  ({args.games} games)", save_path)
+                save_path = Path(__file__).parent / f"results_{args.solution}_d{args.difficulty}.png"
+            plot_single(records, f"{args.solution} vs {opp_label}  ({args.games} games)", save_path)
 
 
 if __name__ == "__main__":

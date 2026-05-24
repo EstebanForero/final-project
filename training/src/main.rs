@@ -31,7 +31,7 @@ fn main() {
 
     let mut save_handle: Option<JoinHandle<()>> = None;
 
-    for iteration in 0..100_000 {
+    for iteration in 0..10_000_000 {
         let projected_trials: Vec<(Vec<Transition>, Vec<Transition>)> = (0..BATCH_SIZE)
             .into_par_iter()
             .map(|_| {
@@ -48,7 +48,14 @@ fn main() {
             policy_evaluator.evaluate_trial(&trial_player_b, &mut global_q_values);
         }
 
-        if iteration % 20_000 == 0 && iteration != 0 {
+        if iteration % 50_000 == 0 && iteration != 0 {
+            println!(
+                "Iteration: {iteration}\nQValues: {}",
+                global_q_values.table.len()
+            );
+        }
+
+        if iteration % 200_000 == 0 && iteration != 0 {
             println!(
                 "Iteration: {iteration}\nQValues: {}",
                 global_q_values.table.len()

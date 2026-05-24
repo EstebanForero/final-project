@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 train-connect4-qnet = "connect4_qnet.train:main"
+train-connect4-vnet = "connect4_qnet.train_vnet:main"
 inspect-connect4-qvalues = "connect4_qnet.inspect_qvalues:main"
 export-connect4-qnet-raw = "connect4_qnet.export_raw:main"
 evaluate-connect4-qnet = "connect4_qnet.evaluate_generalization:main"
