@@ -12,13 +12,13 @@ if str(_THIS_DIR) not in sys.path:
 
 import mojo.importer  # noqa: F401
 
-import negamax_mojo  # isort: skip
+import solution  # isort: skip  — compiles solution.mojo automatically
 
 
 class OhYes(Policy):
     def mount(self, timeout=None) -> None:
         self.timeout = timeout
-        self.search_depth = 6
+        self.search_depth = 4   # change this to control how deep your search goes
 
     def act(self, s: np.ndarray) -> int:
         if not hasattr(self, "search_depth"):
@@ -26,8 +26,10 @@ class OhYes(Policy):
 
         board = np.asarray(s, dtype=np.float32, order="C")
 
-        # Current player's pieces → +1, opponent → -1
+        # ConnectState stores Red=-1, Yellow=+1.
+        # solution.mojo expects the current player's pieces as +1.
+        # Equal piece counts means Red is to move, so flip the board.
         if np.sum(board == -1) == np.sum(board == 1):
             board = -board
 
-        return int(negamax_mojo.act_tt(board.ravel(), self.search_depth))
+        return int(solution.act(board.ravel(), self.search_depth))
