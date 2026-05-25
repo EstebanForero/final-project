@@ -173,7 +173,7 @@ def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int, mut transpos
     elif board.is_draw():
         return 0
     elif depth == 0:
-        return heuristic(board) # TODO: heuristics
+        return heuristic(board)
 
     var best_score = -(BIG_SCORE + depth)
 
