@@ -17,7 +17,14 @@ def make_initial_matches(
         rng = np.random.default_rng(seed)
         rng.shuffle(players)
     size = next_power_of_two(len(players))
-    players += [None] * (size - len(players))  # BYEs
+    num_byes = size - len(players)
+    
+    # Distribute BYEs evenly: insert after every nth player
+    if num_byes > 0:
+        bye_interval = len(players) // num_byes if num_byes > 0 else len(players)
+        for i in range(num_byes):
+            players.insert((i + 1) * bye_interval + i, None)
+    
     return [(players[i], players[i + 1]) for i in range(0, len(players), 2)]
 
 
