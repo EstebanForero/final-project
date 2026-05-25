@@ -25,6 +25,7 @@ def _current_player_board(s: np.ndarray) -> np.ndarray:
 
 # class NegamaxMojo(Policy):
 class NegamaxMojo:
+    # class NegamaxMojo:
     """Pure negamax + alpha-beta in Mojo. Same heuristic as Python Group B."""
 
     def mount(self, timeout=None) -> None:
@@ -38,13 +39,12 @@ class NegamaxMojo:
         return int(negamax_mojo.act_plain(board.ravel(), self.search_depth))
 
 
-# class NegamaxTTMojo(Policy):
-class NegamaxTTMojo:
+class NegamaxTTMojo(Policy):
     """Negamax + alpha-beta + transposition table in Mojo."""
 
     def mount(self, timeout=None) -> None:
         self.timeout = timeout
-        self.search_depth = 4
+        self.search_depth = 8
 
     def act(self, s: np.ndarray) -> int:
         if not hasattr(self, "search_depth"):

@@ -44,7 +44,8 @@ struct Agent(Defaultable, Movable, Writable):
     def act(self_ptr: UnsafePointer[Self, MutAnyOrigin], flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObject:
         #var self_ptr = py_self.downcast_value_ptr[Agent]()
         var board = from_flat_board(flat_board)
-        return select_best_move(board, self_ptr[].tt)
+        var depth = max(0, Int(py=depth_obj))
+        return select_best_move(board, depth, self_ptr[].tt)
 
     def __str__(self) -> String:
         return String("Agent")
@@ -62,7 +63,7 @@ def PyInit_solution() -> PythonObject:
     except e:
         abort(String("error: ", e))
 
-def select_best_move(mut board: Bitboard, mut transposition_table: List[TTEntry]) -> Int:
+def select_best_move(mut board: Bitboard, depth: Int, mut transposition_table: List[TTEntry]) -> Int:
     var action_max = -1
     var score_max = -Int.MAX
 
@@ -70,7 +71,7 @@ def select_best_move(mut board: Bitboard, mut transposition_table: List[TTEntry]
 
         if board.is_valid_move(col):
             board.make_move(col)
-            var score = -negamax(board, DEPTH - 1, -Int.MAX, Int.MAX, transposition_table)
+            var score = -negamax(board, depth - 1, -Int.MAX, Int.MAX, transposition_table)
             board.undo_move(col)
 
             if score > score_max:
@@ -174,7 +175,7 @@ def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int, mut transpos
     elif depth == 0:
         return heuristic(board) # TODO: heuristics
 
-    var best_score = -(BIG_SCORE + DEPTH)
+    var best_score = -(BIG_SCORE + depth)
 
     var local_alpha = alpha
     var local_beta = beta

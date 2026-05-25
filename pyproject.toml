@@ -8,5 +8,12 @@ dependencies = [
     "matplotlib>=3.10.9",
     "mojo>=0.26.2.0",
     "numpy>=2.4.5",
+    "pandas>=3.0.3",
     "pydantic>=2.13.4",
+    "seaborn>=0.13.2",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.2.0",
 ]

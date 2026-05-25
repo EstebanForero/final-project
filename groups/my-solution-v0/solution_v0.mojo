@@ -44,10 +44,11 @@ def act(flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObjec
     # TODO: implement solution start in here
 
     var board = from_flat_board(flat_board)
-    return select_best_move(board)
+    var depth = max(0, Int(py=depth_obj))
+    return select_best_move(board, depth)
 
 
-def select_best_move(mut board: Bitboard) -> Int:
+def select_best_move(mut board: Bitboard, depth: Int) -> Int:
     var action_max = -1
     var score_max = -Int.MAX
 
@@ -55,7 +56,7 @@ def select_best_move(mut board: Bitboard) -> Int:
 
         if board.is_valid_move(col):
             board.make_move(col)
-            var score = -negamax(board, DEPTH - 1, -Int.MAX, Int.MAX)
+            var score = -negamax(board, depth - 1, -Int.MAX, Int.MAX)
             board.undo_move(col)
 
             if score > score_max:
