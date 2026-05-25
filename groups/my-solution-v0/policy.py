@@ -12,10 +12,11 @@ if str(_THIS_DIR) not in sys.path:
 
 import mojo.importer  # noqa: F401
 
-import solution  # isort: skip  — compiles solution.mojo automatically
+import solution_v0 as solution  # isort: skip  — compiles solution_v0.mojo automatically
 
 
-class OhYes(Policy):
+# class OhYes(Policy):
+class OhYes:
     def mount(self, timeout=None) -> None:
         self.timeout = timeout
         self.search_depth = 4  # change this to control how deep your search goes

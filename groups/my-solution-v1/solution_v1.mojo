@@ -26,13 +26,13 @@ def full_board_mask() -> UInt64:
 comptime FULL_BOARD: UInt64 = full_board_mask();
 
 @export
-def PyInit_solution() -> PythonObject:
+def PyInit_solution_v1() -> PythonObject:
     try:
-        var m = PythonModuleBuilder("solution")
+        var m = PythonModuleBuilder("solution_v1")
         m.def_function[act]("act", docstring="Pick a column to play")
         return m.finalize()
     except e:
-        abort(String("error creating solution module: ", e))
+        abort(String("error creating solution_v1 module: ", e))
 
 
 def act(flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObject:

@@ -20,6 +20,8 @@ class OhYes(Policy):
         self.timeout = timeout
         self.search_depth = 4  # change this to control how deep your search goes
 
+        self.agent = solution.Agent()
+
     def act(self, s: np.ndarray) -> int:
         if not hasattr(self, "search_depth"):
             self.mount()
@@ -32,4 +34,4 @@ class OhYes(Policy):
         if np.sum(board == -1) == np.sum(board == 1):
             board = -board
 
-        return int(solution.act(np.flipud(board).ravel(), self.search_depth))
+        return int(self.agent.act(np.flipud(board).ravel(), self.search_depth))

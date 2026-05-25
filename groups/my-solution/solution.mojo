@@ -32,7 +32,7 @@ def full_board_mask() -> UInt64:
 comptime FULL_BOARD: UInt64 = full_board_mask();
 
 
-struct Agent(Movable, Writable):
+struct Agent(Defaultable, Movable, Writable):
     var tt: List[TTEntry]
 
     def __init__(out self):
@@ -53,7 +53,11 @@ struct Agent(Movable, Writable):
 def PyInit_solution() -> PythonObject:
     try:
         var m = PythonModuleBuilder("solution")
-        _ = m.add_type[Agent]("Agent").def_method[Agent.act]("act", docstring="Pick a column")
+        _ = (
+            m.add_type[Agent]("Agent")
+            .def_init_defaultable[Agent]()
+            .def_method[Agent.act]("act", docstring="Pick a column")
+        )
         return m.finalize()
     except e:
         abort(String("error: ", e))
@@ -235,7 +239,7 @@ def heuristic(board: Bitboard) -> Int:
 
 # Transposition table implementation
 
-struct TTEntry(ImplicitlyCopyable):
+struct TTEntry(ImplicitlyCopyable, Movable, Writable):
     var hash: UInt64
     var score: Int
     var depth: Int
@@ -253,3 +257,5 @@ struct TTEntry(ImplicitlyCopyable):
         self.depth = depth
         self.flag  = flag
 
+    # def write_to[W: Writer](self, mut writer: W):
+    #     writer.write("TTEntry(", self.hash, ", ", self.score, ")")

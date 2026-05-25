@@ -12,7 +12,7 @@ if str(_THIS_DIR) not in sys.path:
 
 import mojo.importer  # noqa: F401
 
-import solution  # isort: skip  — compiles solution.mojo automatically
+import solution_v1 as solution  # isort: skip  — compiles solution_v1.mojo automatically
 
 
 class OhYes(Policy):
