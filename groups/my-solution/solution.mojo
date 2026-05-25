@@ -2,6 +2,8 @@ from std.python import Python, PythonObject
 from std.python.bindings import PythonModuleBuilder
 from std.os import abort
 
+from std.bit import pop_count
+
 comptime WIDTH: UInt64  = 7
 comptime STRIDE: UInt64  = WIDTH + 1
 comptime HEIGHT: UInt64 = 6
@@ -140,7 +142,7 @@ def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int) -> Int:
     elif board.is_draw():
         return 0
     elif depth == 0:
-        return 0 # TODO: heuristics
+        return heuristic(board) # TODO: heuristics
 
     var best_score = -BIG_SCORE
 
@@ -160,3 +162,21 @@ def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int) -> Int:
                 break
 
     return best_score
+
+def heuristic(board: Bitboard) -> Int:
+    var score = 0
+
+    for shift in [UInt64(1), STRIDE, STRIDE + 1, STRIDE - 1]:
+        var my_pairs = board.my_pieces & (board.my_pieces >> shift)
+        var opp_pairs = board.opp_pieces & (board.opp_pieces >> shift)
+
+        score += Int(pop_count(my_pairs))
+        score -= Int(pop_count(opp_pairs))
+
+        var my_triples = my_pairs & (my_pairs >> shift)
+        var opp_triples = opp_pairs & (opp_pairs >> shift)
+
+        score += 4 * Int(pop_count(my_triples))
+        score -= 4 * Int(pop_count(opp_triples))
+
+    return score
