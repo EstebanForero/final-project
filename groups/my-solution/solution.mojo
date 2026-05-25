@@ -6,6 +6,11 @@ comptime WIDTH: UInt64  = 7
 comptime STRIDE: UInt64  = WIDTH + 1
 comptime HEIGHT: UInt64 = 6
 
+# In select best move
+comptime DEPTH: Int = 4
+
+# Used for negamax win or lose situations
+comptime BIG_SCORE: Int = 1000000
 
 @export
 def PyInit_solution() -> PythonObject:
@@ -28,21 +33,21 @@ def act(flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObjec
     var board = from_flat_board(flat_board)
     return select_best_move(board)
 
-comptime DEPTH: Int = 4
 
 def select_best_move(mut board: Bitboard) -> Int:
-    var action_max = 3
+    var action_max = -1
     var score_max = -BIG_SCORE
 
     for col in range(0, 7):
 
-        board.make_move(col)
-        var score = negamax(board, DEPTH, -Int.MAX, Int.MAX)
-        board.undo_move(col)
+        if board.is_valid_move(col):
+            board.make_move(col)
+            var score = -negamax(board, DEPTH - 1, -BIG_SCORE, BIG_SCORE)
+            board.undo_move(col)
 
-        if score > score_max:
-            score_max = score
-            action_max = col
+            if score > score_max:
+                score_max = score
+                action_max = col
 
     return action_max
 
@@ -114,8 +119,6 @@ def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
 
     return board^
 
-
-comptime BIG_SCORE: Int = 1000000
 
 def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int) -> Int:
     if board.check_win_opp():
