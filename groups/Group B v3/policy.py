@@ -70,7 +70,7 @@ class MCTSNode:
 class DEPTHAgent(Policy):
     """True Monte Carlo Tree Search Agent for Connect-4 with deep tree exploration."""
 
-    def __init__(self, num_simulations: int = 500, max_depth: int = 42):
+    def __init__(self, num_simulations: int = 4000, max_depth: int = 42):
         self.num_simulations = num_simulations
         self.max_depth = max_depth
         self.c = math.sqrt(2)  # UCB exploration constant
