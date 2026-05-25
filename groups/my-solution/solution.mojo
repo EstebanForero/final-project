@@ -41,8 +41,8 @@ struct Agent(Defaultable, Movable, Writable):
             self.tt.append(TTEntry())
 
     @staticmethod
-    def act(py_self: PythonObject, flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObject:
-        var self_ptr = py_self.downcast_value_ptr[Agent]()
+    def act(self_ptr: UnsafePointer[Self, MutAnyOrigin], flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObject:
+        #var self_ptr = py_self.downcast_value_ptr[Agent]()
         var board = from_flat_board(flat_board)
         return select_best_move(board, self_ptr[].tt)
 
@@ -70,7 +70,7 @@ def select_best_move(mut board: Bitboard, transposition_table: List[TTEntry]) ->
 
         if board.is_valid_move(col):
             board.make_move(col)
-            var score = -negamax(board, DEPTH - 1, -Int.MAX, Int.MAX)
+            var score = -negamax(board, DEPTH - 1, -Int.MAX, Int.MAX, transposition_table)
             board.undo_move(col)
 
             if score > score_max:
@@ -138,6 +138,13 @@ struct Bitboard(Movable):
             return -1
         return 0
 
+    def key(self) -> UInt64: # Murmur hash finalizer
+        var hash = self.my_pieces ^ (self.opp_pieces * UInt64(0x9E3779B97F4A7C15)) # Golden ratio constant
+        hash ^= hash >> 33 # 64 bit integer gives the mest mixing, just over half
+        hash *= UInt64(0xFF51AFD7ED558CCD) # MurmurHash3 paper constant?
+        hash ^= hash >> 33
+        return hash
+
 
 def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
     var board = Bitboard()
@@ -159,7 +166,7 @@ def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
     return board^
 
 
-def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int) -> Int:
+def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int, transposition_table: List[TTEntry]) -> Int:
     if board.check_win_opp():
         return -(BIG_SCORE + depth)
     elif board.is_draw():
@@ -174,7 +181,7 @@ def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int) -> Int:
     for col in COL_ORDER:
         if board.is_valid_move(col):
             board.make_move(col)
-            var score = -negamax(board, depth - 1, -beta, -local_alpha)
+            var score = -negamax(board, depth - 1, -beta, -local_alpha, transposition_table)
             board.undo_move(col)
 
             if score > best_score:
@@ -256,6 +263,3 @@ struct TTEntry(ImplicitlyCopyable, Movable, Writable):
         self.score = score
         self.depth = depth
         self.flag  = flag
-
-    # def write_to[W: Writer](self, mut writer: W):
-    #     writer.write("TTEntry(", self.hash, ", ", self.score, ")")
