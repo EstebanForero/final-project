@@ -2,356 +2,376 @@ import numpy as np
 import random
 import pickle
 import os
+import time
 from connect4.policy import Policy
 from connect4.connect_state import ConnectState
 
 
-# ============================================================
-# MÓDULO 1: HEURISTICS — Reward Shaping
-# ============================================================
-# [HEURISTIC] This entire class implements reward shaping —
-# a heuristic technique that adds domain knowledge to the reward
-# signal instead of relying only on win/loss outcomes.
-# Rather than waiting until the game ends, we score intermediate
-# board states based on known Connect 4 patterns (3-in-a-row,
-# 2-in-a-row, center control). This guides the Monte Carlo
-# rollouts toward strategically better terminal states.
-class HeuristicEvaluator:
-    # [HEURISTIC] Column weights encode the geometric fact that
-    # center columns participate in more winning lines than edges.
-    # Col 3 (center) = 0.20, edges = 0.02.
-    COL_WEIGHT = np.array([0.02, 0.06, 0.12, 0.20, 0.12, 0.06, 0.02])
+# ================================================================
+# PART 1: BOARD SCORER
+# Looks at the final board after a simulation and gives a score.
+# Positive = good for us, Negative = bad for us.
+# This is called REWARD SHAPING — we add board knowledge to the
+# basic win/loss reward so the agent learns faster.
+# ================================================================
+def score_board(board, my_piece):
+    enemy_piece = -my_piece
+    total = 0.0
 
-    @staticmethod
-    def get_shaping_reward(board, yo):
-        rival, score = -yo, 0.0
+    # How valuable is each column? Center = more winning lines
+    # Col:       0     1     2     3     4     5     6
+    col_value = [0.02, 0.06, 0.12, 0.20, 0.12, 0.06, 0.02]
 
-        def scan(window):
-            nonlocal score
-            m = np.count_nonzero(window==yo)
-            e = np.count_nonzero(window==rival)
-            v = np.count_nonzero(window==0)
-            if m>0 and e>0: return  # mixed window, no value
+    def score_window(window):
+        # Count my pieces, enemy pieces, and empty spaces in a 4-cell window
+        mine  = np.count_nonzero(window == my_piece)
+        enemy = np.count_nonzero(window == enemy_piece)
+        empty = np.count_nonzero(window == 0)
 
-            # [HEURISTIC] Score windows by pattern strength.
-            # 3-in-a-row with 1 empty = near-win threat (+0.6 / -0.7).
-            # 2-in-a-row with 2 empty = building threat (+0.2 / -0.3).
-            # Opponent threats weighted slightly higher to prioritise defence.
-            if m==3 and v==1: score += 0.6
-            if m==2 and v==2: score += 0.2
-            if e==3 and v==1: score -= 0.7
-            if e==2 and v==2: score -= 0.3
+        # Ignore windows where both players have pieces (blocked)
+        if mine > 0 and enemy > 0:
+            return 0.0
 
-        # [HEURISTIC] Scan all 4 directions for threat windows
-        for r in range(6):
-            for c in range(4):
-                scan(board[r, c:c+4])          # horizontal
-        for c in range(7):
-            for r in range(3):
-                scan(board[r:r+4, c])          # vertical
-        for r in range(3):
-            for c in range(4):
-                scan(np.array([board[r+i,   c+i] for i in range(4)]))  # diagonal ↘
-                scan(np.array([board[r+3-i, c+i] for i in range(4)]))  # diagonal ↗
+        if   mine == 3 and empty == 1: return +0.6   # I have 3 in a row — strong threat
+        elif mine == 2 and empty == 2: return +0.2   # I have 2 in a row — building
+        elif enemy == 3 and empty == 1: return -0.7  # Enemy has 3 in a row — danger
+        elif enemy == 2 and empty == 2: return -0.3  # Enemy has 2 in a row — watch out
+        return 0.0
 
-        # [HEURISTIC] Center ownership bonus — reward occupying
-        # high-value columns regardless of threat patterns.
-        for c in range(7):
-            score += np.count_nonzero(board[:,c]==yo) * HeuristicEvaluator.COL_WEIGHT[c]
+    # Scan every possible 4-cell window in all 4 directions
+    for row in range(6):
+        for col in range(4):
+            total += score_window(board[row, col:col+4])          # horizontal →
 
-        return score
+    for col in range(7):
+        for row in range(3):
+            total += score_window(board[row:row+4, col])          # vertical ↓
+
+    for row in range(3):
+        for col in range(4):
+            diag_down = np.array([board[row+i, col+i] for i in range(4)])
+            diag_up   = np.array([board[row+3-i, col+i] for i in range(4)])
+            total += score_window(diag_down)                      # diagonal ↘
+            total += score_window(diag_up)                        # diagonal ↗
+
+    # Bonus for owning pieces in valuable (center) columns
+    for col in range(7):
+        my_pieces_in_col = np.count_nonzero(board[:, col] == my_piece)
+        total += my_pieces_in_col * col_value[col]
+
+    return total
 
 
-# ============================================================
-# MÓDULO 2: ROLLOUT AGENT
-# ============================================================
+# ================================================================
+# PART 2: THE AGENT
+# ================================================================
 class RolloutAgent2(Policy):
-    N_ROLLOUTS   = 40     # simulations per action for MC evaluation
-    ALPHA        = 0.1    # Q-learning rate — how fast Q-values update
-    CENTER_ORDER = [3, 2, 4, 1, 5, 0, 6]
 
-    # [HEURISTIC] Static center bias added to rollout scores before argmax.
-    # Breaks ties consistently toward center columns without overriding
-    # strong MC signals. Same shape as COL_WEIGHT.
-    CENTER_BIAS  = np.array([0.02, 0.06, 0.12, 0.20, 0.12, 0.06, 0.02])
+    TIME_LIMIT   = 9.0   # seconds per turn (leave 1s buffer from the 10s budget)
+    ALPHA        = 0.15  # how fast Q-values update (learning rate)
+    CENTER_COLS  = [3, 2, 4, 1, 5, 0, 6]   # preferred column order
+    CENTER_BONUS = np.array([0.02, 0.06, 0.12, 0.20, 0.12, 0.06, 0.02])
+
+    # A state needs this many visits before we trust its Q-values
+    TRUST_AFTER = 10
 
     def __init__(self):
-        # [Q-TABLE] Load persisted Q-values from disk. The Q-table maps
-        # board state → per-column Q-values learned across all past games.
+        # Load Q-values learned in previous games
+        # Q-TABLE: maps board_state → [7 values, one per column]
         self.q_table = self._load_memory()
 
     def mount(self, timeout=None):
-        # Called by the tournament before every game.
-        # Save whatever the previous instance learned, then reload
-        # so Q-values accumulate across games even though the
-        # tournament creates a fresh object each time.
-        self._save_memory()  # [Q-TABLE] flush previous game's learning
-        self.q_table = self._load_memory()  # [Q-TABLE] reload latest values
+        # Tournament calls this before each game.
+        # Save whatever we learned last game, then reload.
+        self._save_memory()
+        self.q_table = self._load_memory()
 
-    # ----------------------------------------------------------
-    # PLAYER DETECTION
-    # ----------------------------------------------------------
+    # ============================================================
+    # HELPER: figure out whose turn it is from the board
+    # ============================================================
     @staticmethod
-    def _get_player(board):
-        # Player 1 always goes first, so equal piece counts = player 1's turn
-        return 1 if np.count_nonzero(board==1)==np.count_nonzero(board==-1) else -1
+    def whose_turn(board):
+        # Player 1 always goes first, so equal pieces = player 1's turn
+        if np.count_nonzero(board == 1) == np.count_nonzero(board == -1):
+            return 1
+        return -1
 
-    # ----------------------------------------------------------
-    # EXPLICIT WIN CHECK
-    # ----------------------------------------------------------
+    # ============================================================
+    # HELPER: would dropping in this column win for this player?
+    # ============================================================
     @staticmethod
-    def _can_win(board, col, player):
-        # [HEURISTIC] Depth-1 greedy search — simulate dropping a piece
-        # and check all 4 directions for an immediate win.
-        # Used in Filter 1 (take win) and Filter 2 (block opponent win).
+    def wins_immediately(board, col, player):
         if board[0, col] != 0:
-            return False
-        b = board.copy()
-        for r in range(5, -1, -1):
-            if b[r, col] == 0:
-                b[r, col] = player
+            return False  # column is full
+
+        # Make a copy and drop the piece
+        test = board.copy()
+        for row in range(5, -1, -1):
+            if test[row, col] == 0:
+                test[row, col] = player
                 break
+
+        # Check all 4 directions for 4 in a row
         for r in range(6):
             for c in range(7):
-                p = b[r,c]
-                if p != player: continue
-                if c+3<7 and all(b[r,c+i]==p for i in range(4)): return True
-                if r+3<6 and all(b[r+i,c]==p for i in range(4)): return True
-                if r+3<6 and c+3<7 and all(b[r+i,c+i]==p for i in range(4)): return True
-                if r+3<6 and c-3>=0 and all(b[r+i,c-i]==p for i in range(4)): return True
+                if test[r, c] != player:
+                    continue
+                if c+3 < 7 and all(test[r, c+i] == player for i in range(4)): return True
+                if r+3 < 6 and all(test[r+i, c] == player for i in range(4)): return True
+                if r+3 < 6 and c+3 < 7 and all(test[r+i, c+i] == player for i in range(4)): return True
+                if r+3 < 6 and c-3 >= 0 and all(test[r+i, c-i] == player for i in range(4)): return True
         return False
 
-    # ----------------------------------------------------------
-    # THREAT DETECTORS
-    # ----------------------------------------------------------
-    def _detect_vertical_threat(self, board, col, player):
-        # [HEURISTIC] Detect 3-in-a-column with 1 empty above —
-        # catches the edge-column stacking exploit seen in lost games.
-        for r in range(3):
-            w = board[r:r+4, col]
-            if np.count_nonzero(w==player)==3 and np.count_nonzero(w==0)==1:
+    # ============================================================
+    # HELPER: how many 3-in-a-row threats does this move create?
+    # If >= 2, opponent can't block all of them → guaranteed win
+    # ============================================================
+    def count_threats_created(self, board, col, player):
+        test = board.copy()
+        for row in range(5, -1, -1):
+            if test[row, col] == 0:
+                test[row, col] = player
+                break
+
+        threat_count = 0
+        enemy = -player
+
+        def check_window(window):
+            nonlocal threat_count
+            mine  = np.count_nonzero(window == player)
+            enemy_in = np.count_nonzero(window == enemy)
+            empty = np.count_nonzero(window == 0)
+            if mine == 3 and empty == 1 and enemy_in == 0:
+                threat_count += 1
+
+        for row in range(6):
+            for col2 in range(4):
+                check_window(test[row, col2:col2+4])
+        for col2 in range(7):
+            for row in range(3):
+                check_window(test[row:row+4, col2])
+        for row in range(3):
+            for col2 in range(4):
+                check_window(np.array([test[row+i,   col2+i] for i in range(4)]))
+                check_window(np.array([test[row+3-i, col2+i] for i in range(4)]))
+
+        return threat_count
+
+    # ============================================================
+    # HELPER: does this column have 3 stacked vertically?
+    # ============================================================
+    def has_vertical_threat(self, board, col, player):
+        for row in range(3):
+            window = board[row:row+4, col]
+            if np.count_nonzero(window == player) == 3 and np.count_nonzero(window == 0) == 1:
                 return True
         return False
 
-    def _detect_diagonal_threat(self, board, col, rival):
-        # [HEURISTIC] Simulate placing rival's piece and check if it
-        # creates or extends a diagonal 3-in-a-row. Prevents diagonal
-        # build-ups that pure rollouts sometimes miss.
-        test = board.copy()
-        row  = None
-        for r in range(5,-1,-1):
-            if test[r,col]==0: row=r; break
-        if row is None: return False
-        test[row,col] = rival
-        for r in range(3):
-            for c in range(4):
-                for w in (
-                    np.array([test[r+i,   c+i] for i in range(4)]),
-                    np.array([test[r+3-i, c+i] for i in range(4)])
-                ):
-                    if np.count_nonzero(w==rival)==3 and np.count_nonzero(w==0)==1:
-                        return True
-        return False
-
-    def _count_threats(self, board, col, player):
-        # [HEURISTIC] Count simultaneous 3-in-a-row threats after playing col.
-        # If >= 2, opponent can only block one → guaranteed win next turn.
-        # Used in Filter 3 (create fork) and Filter 4 (block opponent fork).
-        b = board.copy()
-        for r in range(5,-1,-1):
-            if b[r,col]==0: b[r,col]=player; break
-        rival   = -player
-        threats = 0
-        def scan_threats(window):
-            nonlocal threats
-            m = np.count_nonzero(window==player)
-            e = np.count_nonzero(window==rival)
-            v = np.count_nonzero(window==0)
-            if m==3 and v==1 and e==0: threats+=1
-        for r in range(6):
-            for c in range(4): scan_threats(b[r,c:c+4])
-        for c in range(7):
-            for r in range(3): scan_threats(b[r:r+4,c])
-        for r in range(3):
-            for c in range(4):
-                scan_threats(np.array([b[r+i,   c+i] for i in range(4)]))
-                scan_threats(np.array([b[r+3-i, c+i] for i in range(4)]))
-        return threats
-
-    # ----------------------------------------------------------
-    # MAIN ENTRY POINT
-    # ----------------------------------------------------------
+    # ============================================================
+    # MAIN DECISION — called every turn
+    # ============================================================
     def act(self, s):
-        yo    = self._get_player(s)
-        rival = -yo
-        free  = [c for c in range(7) if s[0,c]==0]
+        me    = self.whose_turn(s)
+        enemy = -me
+        free  = [c for c in range(7) if s[0, c] == 0]
 
         if not free:
             return 0
 
-        # [HEURISTIC] FILTER 1 — depth-1 greedy win search.
-        # Always take an immediate win before any other consideration.
+        turn_start = time.time()
+
+        def finish(col, reason=""):
+            elapsed = time.time() - turn_start
+            print(f"Rollout2: {elapsed:.2f}s  col={col}  [{reason}]")
+            return col
+
+        # --------------------------------------------------------
+        # LAYER 1: INSTANT DECISIONS (heuristic rules, no simulation)
+        # These fire before any Q-lookup or simulation.
+        # --------------------------------------------------------
+
+        # Rule 1: If I can win right now, do it
         for col in free:
-            if self._can_win(s, col, yo):
-                return col
+            if self.wins_immediately(s, col, me):
+                return finish(col, "win")
 
-        # [HEURISTIC] FILTER 2 — depth-1 greedy block.
-        # Block any immediate opponent win.
+        # Rule 2: If enemy wins next move, block it
         for col in free:
-            if self._can_win(s, col, rival):
-                return col
+            if self.wins_immediately(s, col, enemy):
+                return finish(col, "block")
 
-        # [HEURISTIC] FILTER 3 — fork creation.
-        # If a move creates 2+ simultaneous threats, take it — opponent
-        # can only block one, so this guarantees a win next turn.
+        # Rule 3: If I can create 2+ threats at once (fork), do it
+        # Opponent can only block one → I win next turn guaranteed
         for col in free:
-            if self._count_threats(s, col, yo) >= 2:
-                return col
+            if self.count_threats_created(s, col, me) >= 2:
+                return finish(col, "fork")
 
-        # [HEURISTIC] FILTER 4 — fork prevention.
-        # Block the opponent from creating an unblockable double threat.
+        # Rule 4: Block enemy fork
         for col in free:
-            if self._count_threats(s, col, rival) >= 2:
-                return col
+            if self.count_threats_created(s, col, enemy) >= 2:
+                return finish(col, "block fork")
 
-        # [HEURISTIC] FILTER 5 — vertical build-up block.
-        # Catches 3-in-a-column before it becomes an unstoppable stack.
+        # Rule 5: Block enemy stacking 3 vertically
         for col in free:
-            if self._detect_vertical_threat(s, col, rival):
-                return col
+            if self.has_vertical_threat(s, col, enemy):
+                return finish(col, "block vertical")
 
-        # [HEURISTIC] FILTER 6 — diagonal build-up block.
-        # Catches diagonal 3-in-a-rows before they complete.
-        for col in free:
-            if self._detect_diagonal_threat(s, col, rival):
-                return col
+        # --------------------------------------------------------
+        # LAYER 2: Q-TABLE + SIMULATION DECISION
+        # No forcing move found — use learned values or simulate.
+        # --------------------------------------------------------
 
-        # ── No forcing move found — fall through to MC + Q-table ──
-
-        # [Q-TABLE] Look up (or initialise) the Q-value entry for this
-        # exact board state. Each entry stores:
-        #   "q"     — learned Q-value per column (7 floats)
-        #   "n"     — visit count per column (for tracking)
-        #   "total" — total visits to this state
+        # Get or create the Q-entry for this exact board position
+        # Q-TABLE STRUCTURE per state:
+        #   "q"     → learned value for each of the 7 columns
+        #   "n"     → how many times we've tried each column here
+        #   "total" → total visits to this board state
         state_id = s.tobytes()
         if state_id not in self.q_table:
-            self.q_table[state_id] = {"q":np.zeros(7),"n":np.zeros(7),"total":0}
-            self._save_memory()  # persist new state immediately
+            self.q_table[state_id] = {
+                "q":     np.zeros(7),
+                "n":     np.zeros(7),
+                "total": 0
+            }
 
-        sd     = self.q_table[state_id]
-        scores = {}
+        entry = self.q_table[state_id]
 
+        # Which columns have been tried enough to trust?
+        trusted = [c for c in free if entry["n"][c] >= self.TRUST_AFTER]
+
+        if trusted:
+            # ── EXPLOITATION ──────────────────────────────────
+            # We've seen this position before. Use learned Q-values.
+            # Pick the column with the highest Q-value among trusted cols.
+            #
+            # Q-TABLE READ: acting on what we already learned
+            best_col = max(trusted, key=lambda c: entry["q"][c])
+
+            # Keep running simulations on the chosen column until time runs out.
+            # This continuously refines the Q-value while we still have budget.
+            sims_run = 0
+            while time.time() - turn_start < self.TIME_LIMIT:
+                result = self.run_one_simulation(s, best_col, me)
+
+                # Q-TABLE WRITE: update Q-value with new simulation result
+                # Formula: Q = Q + alpha * (new_result - old_Q)
+                # This slowly moves Q toward the true average outcome
+                entry["q"][best_col] += self.ALPHA * (result - entry["q"][best_col])
+                entry["n"][best_col] += 1
+                entry["total"]       += 1
+                sims_run += 1
+
+            # Q-TABLE WRITE: save to disk after exploitation turn
+            self._save_memory()
+            return finish(best_col, f"exploit Q  sims={sims_run}")
+
+        else:
+            # ── EXPLORATION ───────────────────────────────────
+            # New or under-visited state. Run simulations on every
+            # free column and pick the best. This builds initial Q-values.
+            #
+            # We keep looping through all columns until time runs out,
+            # so each column gets roughly equal simulation budget.
+            scores     = {col: 0.0 for col in free}
+            sim_counts = {col: 0   for col in free}
+            col_index  = 0
+
+            # Run simulations round-robin across columns until time is up
+            while time.time() - turn_start < self.TIME_LIMIT:
+                col = free[col_index % len(free)]
+                result = self.run_one_simulation(s, col, me)
+
+                # Q-TABLE WRITE: accumulate result into running average
+                entry["q"][col] += self.ALPHA * (result - entry["q"][col])
+                entry["n"][col] += 1
+                entry["total"]  += 1
+
+                scores[col]     += result
+                sim_counts[col] += 1
+                col_index       += 1
+
+            # Pick column with best average simulation result
+            # Add center bonus to break ties toward strategic columns
+            best_col = max(
+                free,
+                key=lambda c: (
+                    (scores[c] / sim_counts[c] if sim_counts[c] > 0 else 0)
+                    + self.CENTER_BONUS[c]
+                )
+            )
+
+            total_sims = sum(sim_counts.values())
+            # Q-TABLE WRITE: save to disk after exploration turn
+            self._save_memory()
+            return finish(best_col, f"explore  sims={total_sims}")
+
+    # ============================================================
+    # ONE SIMULATION: play out a full game from (board, col)
+    # Returns the outcome from my perspective: +10, -10, or 0
+    # ============================================================
+    def run_one_simulation(self, board, col, me):
+        # Start the simulation by playing the chosen column
+        state = ConnectState(board=board, player=me).transition(col)
+
+        # Play random(ish) moves until the game ends
+        while not state.is_final():
+            state = state.transition(self.simulation_move(state))
+
+        winner = state.get_winner()
+        outcome = 10.0 if winner == me else (-10.0 if winner == -me else 0.0)
+
+        # Add board pattern score to the terminal reward (reward shaping)
+        # This gives richer signal than just win/loss
+        outcome += score_board(state.board, me)
+
+        return outcome
+
+    # ============================================================
+    # SIMULATION MOVE POLICY
+    # Decides moves during simulations — not purely random:
+    #   1. Take an immediate win if available
+    #   2. Prefer center columns (45% chance each)
+    #   3. Otherwise random
+    # ============================================================
+    def simulation_move(self, state):
+        free   = state.get_free_cols()
+        player = state.player
+
+        # Grab any immediate win
         for col in free:
-            # [ONLINE POLICY IMPROVEMENT] Run Monte Carlo rollouts to
-            # estimate Q(s, col) — the expected return from playing col
-            # in state s. This is decision-time planning: we improve the
-            # policy right now, during the actual game, rather than
-            # only between games.
-            val = self._monte_carlo_evaluation(s, col, yo)
+            if state.transition(col).get_winner() == player:
+                return col
 
-            # [Q-TABLE] Blend MC estimate with stored Q-value.
-            # q_bon adds a small weight (0.1×) from past experience so
-            # states we've seen many times get a slight nudge toward
-            # historically good moves without overriding fresh MC signal.
-            q_bon = sd["q"][col] * 0.1
+        # Bias toward center columns
+        for col in self.CENTER_COLS:
+            if col in free and random.random() < 0.45:
+                return col
 
-            # [HEURISTIC] Center bias nudges toward structurally better
-            # columns when rollout scores are close. Col 3 = +0.20 bonus.
-            c_bon = self.CENTER_BIAS[col]
-
-            scores[col] = val + q_bon + c_bon
-
-            # [Q-TABLE / ONLINE POLICY IMPROVEMENT] TD update toward the
-            # MC estimate. This is the Q-learning update rule:
-            #   Q(s,a) ← Q(s,a) + α * (target - Q(s,a))
-            # where target = MC return for this action.
-            # Executed on every turn — the policy improves online as
-            # each new MC estimate refines the stored Q-value.
-            sd["q"][col] += self.ALPHA * (val - sd["q"][col])  # [Q-TABLE WRITE]
-            sd["n"][col] += 1
-            sd["total"]  += 1
-
-        # [ONLINE POLICY IMPROVEMENT] ArgMax over blended scores —
-        # the improved policy selects the action with highest combined
-        # MC estimate + Q-memory + center bias.
-        return max(scores, key=scores.get)
-
-    # ----------------------------------------------------------
-    # MONTE CARLO EVALUATION
-    # ----------------------------------------------------------
-    def _monte_carlo_evaluation(self, s, col, yo):
-        # [ONLINE POLICY IMPROVEMENT] Pure rollout evaluation:
-        # simulate N_ROLLOUTS complete games from state s after
-        # playing col, then average the outcomes. This is flat Monte
-        # Carlo — no tree, no branching — giving an unbiased estimate
-        # of Q(s, col) purely through sampling.
-        total = 0.0
-        rival = -yo
-        base  = ConnectState(board=s, player=yo).transition(col)
-
-        for _ in range(self.N_ROLLOUTS):
-            sim = base
-            while not sim.is_final():
-                sim = sim.transition(self._rollout_policy(sim))
-            w = sim.get_winner()
-            # Terminal reward: win=+10, loss=-10, draw=0
-            r = 10.0 if w==yo else (-10.0 if w==rival else 0.0)
-            # [HEURISTIC] Add shaped reward to terminal state score —
-            # this augments the sparse win/loss signal with board pattern
-            # information, giving the MC estimate more gradient to work with.
-            total += r + HeuristicEvaluator.get_shaping_reward(sim.board, yo)
-
-        return total / self.N_ROLLOUTS
-
-    def _rollout_policy(self, sim):
-        # [HEURISTIC] Rollout default policy — not pure random.
-        # Checks for immediate wins first (greedy depth-1), then
-        # uses center-biased sampling. Smarter rollouts produce
-        # better MC estimates than uniform random.
-        free   = sim.get_free_cols()
-        player = sim.player
-
-        # [HEURISTIC] Win check inside rollout — grab forced wins
-        for c in free:
-            if sim.transition(c).get_winner() == player:
-                return c
-
-        # [HEURISTIC] Center-biased random — 45% chance of preferring
-        # center columns. Makes simulated games more realistic.
-        for c in self.CENTER_ORDER:
-            if c in free and random.random() < 0.45:
-                return c
         return random.choice(free)
 
-    # ----------------------------------------------------------
-    # PERSISTENCE — Q-table saved to disk as cerebro.bin
-    # ----------------------------------------------------------
+    # ============================================================
+    # PERSISTENCE: save/load Q-table to disk
+    # ============================================================
     def _get_memory_path(self):
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cerebro.bin")
 
     def _load_memory(self):
-        # [Q-TABLE] Deserialise Q-table from disk. Enables learning
-        # to persist across tournament rounds and training sessions.
         path = self._get_memory_path()
         if os.path.exists(path):
             try:
-                with open(path,"rb") as f:
+                with open(path, "rb") as f:
                     data = pickle.load(f)
-                print(f"[Memory] Loaded {len(data)} states from {path}")
                 return data
             except Exception as e:
-                print(f"[Memory] Load failed ({e}), starting fresh")
+                print(f"[Memory] Load failed: {e}, starting fresh")
         else:
-            print(f"[Memory] No file at {path}, starting fresh")
+            print(f"[Memory] No saved memory found, starting fresh")
         return {}
 
     def _save_memory(self):
-        # [Q-TABLE] Serialise Q-table to disk so learned values survive
-        # between games. Called on new state discovery and at mount().
         path = self._get_memory_path()
         try:
-            with open(path,"wb") as f:
+            with open(path, "wb") as f:
                 pickle.dump(self.q_table, f)
-            print(f"[Memory] Saved {len(self.q_table)} states to {path}")
         except Exception as e:
             print(f"[Memory] Save FAILED: {e}")
