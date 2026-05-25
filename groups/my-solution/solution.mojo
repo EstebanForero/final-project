@@ -45,6 +45,34 @@ struct Bitboard(Movable):
         self.heights[col] += 1
         (self.my_pieces, self.opp_pieces) = (self.opp_pieces, self.my_pieces)
 
+    def undo_move(mut self, col: Int):
+        (self.my_pieces, self.opp_pieces) = (self.opp_pieces, self.my_pieces)
+        self.heights[col] -= 1
+        var bit = UInt64(1) << (STRIDE * UInt64(col) + UInt64(self.heights[col]))
+        self.my_pieces &= ~bit
+
+    def check_win(self) -> Bool:
+        return (
+                self._wins_in(1, self.my_pieces) or # Vertical
+                self._wins_in(STRIDE, self.my_pieces) or # Horizontal
+                self._wins_in(STRIDE - 1, self.my_pieces) or # Diagonal (\)
+                self._wins_in(STRIDE + 1, self.my_pieces) # Diagonal (/) 
+                )
+
+    def check_win_opp(self) -> Bool:
+        return (
+                self._wins_in(1, self.opp_pieces) or # Vertical
+                self._wins_in(STRIDE, self.opp_pieces) or # Horizontal
+                self._wins_in(STRIDE - 1, self.opp_pieces) or # Diagonal (\)
+                self._wins_in(STRIDE + 1, self.opp_pieces) # Diagonal (/) 
+                )
+
+
+    def _wins_in(self, shift: UInt64, pieces: UInt64) -> Bool:
+        var pairs = pieces & (pieces >> shift)
+        return (pairs & (pairs >> (2 * shift))) != 0
+
+
 
 def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
     var board = Bitboard()
@@ -66,5 +94,4 @@ def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
     return board^
 
 
-
-
+comptime BIG_SCORE: Int = 1000000
