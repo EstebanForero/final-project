@@ -38,7 +38,8 @@ class NegamaxMojo:
         return int(negamax_mojo.act_plain(board.ravel(), self.search_depth))
 
 
-class NegamaxTTMojo(Policy):
+# class NegamaxTTMojo(Policy):
+class NegamaxTTMojo:
     """Negamax + alpha-beta + transposition table in Mojo."""
 
     def mount(self, timeout=None) -> None:
