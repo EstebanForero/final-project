@@ -1,6 +1,6 @@
 from connect4.policy import Policy
 from connect4.utils import find_importable_classes
-from tournament import run_tournament, play
+from tournament import play, run_tournament
 
 # Read all files within subfolder of "groups"
 participants = find_importable_classes("groups", Policy)
@@ -15,3 +15,4 @@ champion = run_tournament(
     shuffle=True,
 )
 print("Champion:", champion)
+

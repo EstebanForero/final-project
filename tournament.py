@@ -1,7 +1,9 @@
 from typing import Callable
-from connect4.dtos import Game, Match, Participant, Versus
-from connect4.connect_state import ConnectState
+
 import numpy as np
+
+from connect4.connect_state import ConnectState
+from connect4.dtos import Game, Match, Participant, Versus
 
 
 def next_power_of_two(n: int) -> int:
@@ -161,3 +163,4 @@ def run_tournament(
             return winners[0]
         versus = pair_next_round(winners)
         print("Next Matches:", versus)
+
