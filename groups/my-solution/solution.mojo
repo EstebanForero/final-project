@@ -12,6 +12,17 @@ comptime DEPTH: Int = 4
 # Used for negamax win or lose situations
 comptime BIG_SCORE: Int = 1000000
 
+# Negamax to define order, first we try statistically stronger columns, from center to extremes
+comptime COL_ORDER: InlineArray[Int, Int(WIDTH)] = [3, 2, 4, 1, 5, 0, 6]
+
+def full_board_mask() -> UInt64:
+    var mask: UInt64 = 0
+    for c in range(Int(WIDTH)):
+        mask |= ((UInt64(1) << HEIGHT) - 1) << (UInt64(c) * STRIDE)
+    return mask
+
+comptime FULL_BOARD: UInt64 = full_board_mask();
+
 @export
 def PyInit_solution() -> PythonObject:
     try:
@@ -36,13 +47,13 @@ def act(flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObjec
 
 def select_best_move(mut board: Bitboard) -> Int:
     var action_max = -1
-    var score_max = -BIG_SCORE
+    var score_max = -Int.MAX
 
-    for col in range(0, 7):
+    for col in COL_ORDER:
 
         if board.is_valid_move(col):
             board.make_move(col)
-            var score = -negamax(board, DEPTH - 1, -BIG_SCORE, BIG_SCORE)
+            var score = -negamax(board, DEPTH - 1, -Int.MAX, Int.MAX)
             board.undo_move(col)
 
             if score > score_max:
@@ -98,6 +109,9 @@ struct Bitboard(Movable):
         var pairs = pieces & (pieces >> shift)
         return (pairs & (pairs >> (2 * shift))) != 0
 
+    def is_draw(self) -> Bool:
+        return (self.my_pieces | self.opp_pieces) == FULL_BOARD
+
 
 
 def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
@@ -123,14 +137,16 @@ def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
 def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int) -> Int:
     if board.check_win_opp():
         return -BIG_SCORE
-    if depth == 0:
+    elif board.is_draw():
+        return 0
+    elif depth == 0:
         return 0 # TODO: heuristics
 
     var best_score = -BIG_SCORE
 
     var local_alpha = alpha
 
-    for col in range(0, 7):
+    for col in COL_ORDER:
         if board.is_valid_move(col):
             board.make_move(col)
             var score = -negamax(board, depth - 1, -beta, -local_alpha)

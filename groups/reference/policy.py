@@ -23,7 +23,8 @@ def _current_player_board(s: np.ndarray) -> np.ndarray:
     return board
 
 
-class NegamaxMojo(Policy):
+# class NegamaxMojo(Policy):
+class NegamaxMojo:
     """Pure negamax + alpha-beta in Mojo. Same heuristic as Python Group B."""
 
     def mount(self, timeout=None) -> None:
