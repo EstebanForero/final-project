@@ -62,7 +62,7 @@ def PyInit_solution() -> PythonObject:
     except e:
         abort(String("error: ", e))
 
-def select_best_move(mut board: Bitboard, transposition_table: List[TTEntry]) -> Int:
+def select_best_move(mut board: Bitboard, mut transposition_table: List[TTEntry]) -> Int:
     var action_max = -1
     var score_max = -Int.MAX
 
@@ -166,7 +166,7 @@ def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
     return board^
 
 
-def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int, transposition_table: List[TTEntry]) -> Int:
+def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int, mut transposition_table: List[TTEntry]) -> Int:
     if board.check_win_opp():
         return -(BIG_SCORE + depth)
     elif board.is_draw():
@@ -177,19 +177,47 @@ def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int, transpositio
     var best_score = -(BIG_SCORE + DEPTH)
 
     var local_alpha = alpha
+    var local_beta = beta
+
+    # Index entry in tt
+    var k = board.key()
+    var idx = Int(k & UInt64(TT_SIZE - 1)) # Works only when the table size is a power of 2
+    var entry = transposition_table[idx]
+
+    if entry.hash == k and entry.depth >= depth:
+        if entry.flag == 0: # exact score
+            return entry.score
+        elif entry.flag == 1: # lower bound tighten alpha
+            if entry.score > local_alpha:
+                local_alpha = entry.score
+        elif entry.flag == 2: # upper bound tighten beta
+            if entry.score < local_beta:
+                local_beta = entry.score
+        if local_alpha >= local_beta:
+            return entry.score
+
+    var orig_alpha = local_alpha
 
     for col in COL_ORDER:
         if board.is_valid_move(col):
             board.make_move(col)
-            var score = -negamax(board, depth - 1, -beta, -local_alpha, transposition_table)
+            var score = -negamax(board, depth - 1, -local_beta, -local_alpha, transposition_table)
             board.undo_move(col)
 
             if score > best_score:
                 best_score = score
             if score > local_alpha:
                 local_alpha = score
-            if local_alpha >= beta:
+            if local_alpha >= local_beta:
                 break
+
+    var flag: UInt8 = 0
+
+    if best_score <= orig_alpha:
+        flag = 2 # upper bound
+    elif best_score >= local_beta:
+        flag = 1 # lower bound
+    transposition_table[idx] = TTEntry(k, best_score, depth, flag)
 
     return best_score
 
