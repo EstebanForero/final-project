@@ -23,8 +23,29 @@ def act(flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObjec
     # depth_obj: search depth (int)
     # return: column index to play (0–6)
 
-    # TODO: implement your solution here
-    return 0
+    # TODO: implement solution start in here
+
+    var board = from_flat_board(flat_board)
+    return select_best_move(board)
+
+comptime DEPTH: Int = 4
+
+def select_best_move(mut board: Bitboard) -> Int:
+    var action_max = 3
+    var score_max = -BIG_SCORE
+
+    for col in range(0, 7):
+
+        board.make_move(col)
+        var score = negamax(board, DEPTH, -Int.MAX, Int.MAX)
+        board.undo_move(col)
+
+        if score > score_max:
+            score_max = score
+            action_max = col
+
+    return action_max
+
 
 struct Bitboard(Movable):
     var my_pieces: UInt64
@@ -95,3 +116,28 @@ def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
 
 
 comptime BIG_SCORE: Int = 1000000
+
+def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int) -> Int:
+    if board.check_win_opp():
+        return -BIG_SCORE
+    if depth == 0:
+        return 0 # TODO: heuristics
+
+    var best_score = -BIG_SCORE
+
+    var local_alpha = alpha
+
+    for col in range(0, 7):
+        if board.is_valid_move(col):
+            board.make_move(col)
+            var score = -negamax(board, depth - 1, -beta, -local_alpha)
+            board.undo_move(col)
+
+            if score > best_score:
+                best_score = score
+            if score > alpha:
+                local_alpha = score
+            if local_alpha >= beta:
+                break
+
+    return best_score
