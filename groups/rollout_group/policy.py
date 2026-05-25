@@ -18,8 +18,8 @@ class RolloutAgent(Policy):
         yo = self._get_active_player(s)
         rival = -yo
         
-        # Concepto: Decision-Time Planning (Lección 13, Slide 11)
-        # Se crea el simulador local para planificar Online en el estado actual
+        
+        
         estado_actual = ConnectState(board=s, player=yo)
         columnas_libres = estado_actual.get_free_cols()
         
@@ -27,7 +27,7 @@ class RolloutAgent(Policy):
             return 0
 
         # --- FILTRO 1: Búsqueda Greedy de Victoria ---
-        # Concepto: Profundidad 1 / Acción Codiciosa (Lección 10, Slide 11)
+    
         for col in columnas_libres:
             try:
                 if estado_actual.transition(col).get_winner() == yo:
@@ -36,7 +36,7 @@ class RolloutAgent(Policy):
                 continue
 
         # --- FILTRO 2: Intercepción Analítica de Amenazas (Bloqueo) ---
-        # Concepto: Ensayos Guiados para recompensas escasas (Lección 13, Slide 27)
+        # Concepto: Ensayos Guiados para recompensas escasas 
         # Multiplicar por -1 crea un espejo para evaluar al rival de forma segura
         try:
             tablero_espejo = s * -1
@@ -50,8 +50,8 @@ class RolloutAgent(Policy):
         except:
             pass
 
-        # --- MONTE CARLO ROLLOUTS ---
-        # Concepto: Algoritmo de Rollout Puro / Flat Rollout (Lección 13, Slide 12 y 23)
+        
+
         puntuacion_columnas = {}
 
         for col in columnas_libres:
@@ -64,7 +64,7 @@ class RolloutAgent(Policy):
                 except ValueError:
                     break
                 
-                # Concepto: Default Policy / Muestreo Estocástico (Lección 13, Slide 24)
+                # Concepto: Default Policy / Muestreo Estocástico
                 while not sim.is_final():
                     opciones = sim.get_free_cols()
                     if not opciones:
@@ -74,18 +74,18 @@ class RolloutAgent(Policy):
                     except ValueError:
                         break
                 
-                # Concepto: Evaluación por Inversión de Signos (Lección 13, Slide 24)
+            
                 ganador = sim.get_winner()
                 if ganador == yo:
                     utilidad_total += 1.0
                 elif ganador == rival:
                     utilidad_total -= 1.0
             
-            # Concepto: Estimación del valor Q(s,a) por promedio (Lección 10, Slide 11)
+            # Concepto: Estimación del valor Q(s,a) por promedio
             puntuacion_columnas[col] = utilidad_total / self.num_simulations
 
         if not puntuacion_columnas:
             return columnas_libres[0]
 
-        # Concepto: Operador ArgMax / Selección de Acción (Lección 13, Slide 12)
+        # Concepto: Operador ArgMax / Selección de Acción
         return max(puntuacion_columnas, key=puntuacion_columnas.get)
