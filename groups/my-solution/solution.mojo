@@ -164,7 +164,7 @@ def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int) -> Int:
 
             if score > best_score:
                 best_score = score
-            if score > alpha:
+            if score > local_alpha:
                 local_alpha = score
             if local_alpha >= beta:
                 break
