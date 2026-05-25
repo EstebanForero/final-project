@@ -54,4 +54,4 @@ class NegamaxTTMojo(Policy):
 
 
 # Default export for the runner
-MinimaxMojoPolicy = NegamaxMojo
+MinimaxMojoPolicy = NegamaxTTMojo
