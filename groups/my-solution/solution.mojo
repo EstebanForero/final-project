@@ -146,13 +146,13 @@ def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
 
 def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int) -> Int:
     if board.check_win_opp():
-        return -BIG_SCORE
+        return -(BIG_SCORE + depth)
     elif board.is_draw():
         return 0
     elif depth == 0:
         return heuristic(board) # TODO: heuristics
 
-    var best_score = -BIG_SCORE
+    var best_score = -(BIG_SCORE + DEPTH)
 
     var local_alpha = alpha
 
