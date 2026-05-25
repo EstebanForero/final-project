@@ -4,6 +4,8 @@ from std.os import abort
 
 from std.bit import pop_count
 
+from std.python.bindings import PythonTypeBuilder
+
 comptime WIDTH: UInt64  = 7
 comptime STRIDE: UInt64  = WIDTH + 1
 comptime HEIGHT: UInt64 = 6
@@ -17,6 +19,10 @@ comptime BIG_SCORE: Int = 1000000
 # Negamax to define order, first we try statistically stronger columns, from center to extremes
 comptime COL_ORDER: InlineArray[Int, Int(WIDTH)] = [3, 2, 4, 1, 5, 0, 6]
 
+# Transposition table constants
+
+comptime TT_SIZE = 262144 # 2^18
+
 def full_board_mask() -> UInt64:
     var mask: UInt64 = 0
     for c in range(Int(WIDTH)):
@@ -25,29 +31,34 @@ def full_board_mask() -> UInt64:
 
 comptime FULL_BOARD: UInt64 = full_board_mask();
 
+
+struct Agent(Movable, Writable):
+    var tt: List[TTEntry]
+
+    def __init__(out self):
+        self.tt = List[TTEntry](capacity=TT_SIZE)
+        for _ in range(TT_SIZE):
+            self.tt.append(TTEntry())
+
+    @staticmethod
+    def act(py_self: PythonObject, flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObject:
+        var self_ptr = py_self.downcast_value_ptr[Agent]()
+        var board = from_flat_board(flat_board)
+        return select_best_move(board, self_ptr[].tt)
+
+    def __str__(self) -> String:
+        return String("Agent")
+
 @export
 def PyInit_solution() -> PythonObject:
     try:
         var m = PythonModuleBuilder("solution")
-        m.def_function[act]("act", docstring="Pick a column to play")
+        _ = m.add_type[Agent]("Agent").def_method[Agent.act]("act", docstring="Pick a column")
         return m.finalize()
     except e:
-        abort(String("error creating solution module: ", e))
+        abort(String("error: ", e))
 
-
-def act(flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObject:
-    # flat_board: float32 array of shape (HEIGHT*WIDTH,), row-major
-    # current player's pieces = +1, opponent's pieces = -1, empty = 0
-    # depth_obj: search depth (int)
-    # return: column index to play (0–6)
-
-    # TODO: implement solution start in here
-
-    var board = from_flat_board(flat_board)
-    return select_best_move(board)
-
-
-def select_best_move(mut board: Bitboard) -> Int:
+def select_best_move(mut board: Bitboard, transposition_table: List[TTEntry]) -> Int:
     var action_max = -1
     var score_max = -Int.MAX
 
@@ -221,3 +232,24 @@ def heuristic(board: Bitboard) -> Int:
 
 
     return score
+
+# Transposition table implementation
+
+struct TTEntry(ImplicitlyCopyable):
+    var hash: UInt64
+    var score: Int
+    var depth: Int
+    var flag: UInt8
+
+    def __init__(out self):
+        self.hash = 0
+        self.score = 0
+        self.depth =0
+        self.flag = 0
+
+    def __init__(out self, key: UInt64, score: Int, depth: Int, flag: UInt8):
+        self.hash   = key
+        self.score = score
+        self.depth = depth
+        self.flag  = flag
+
