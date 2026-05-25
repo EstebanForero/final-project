@@ -114,6 +114,14 @@ struct Bitboard(Movable):
     def is_draw(self) -> Bool:
         return (self.my_pieces | self.opp_pieces) == FULL_BOARD
 
+    def piece_at(self, row: Int, col: Int) -> Int:
+        var bit = UInt64(1) << (UInt64(col) * STRIDE + UInt64(row))
+
+        if self.my_pieces & bit:
+            return 1
+        elif self.opp_pieces & bit:
+            return -1
+        return 0
 
 
 def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
@@ -163,20 +171,53 @@ def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int) -> Int:
 
     return best_score
 
+def window_score(window_me: Int, window_opp: Int) -> Int:
+    if window_me > 0 and window_opp > 0:
+        return 0 # Nobody can wi in there since the opponent already has pieces
+    elif window_me == 3:
+        return 5 # strong thread, one move from winning
+    elif window_me == 2:
+        return 2 # building thread for the enemy
+    elif window_opp == 3:
+        return -4 # opponent one move from winning
+    elif window_opp == 2:
+        return -1 # opponent building winning move
+    return 0
+
+def eval_window(board: Bitboard, row: Int, col: Int, delta_row: Int, delta_col: Int) -> Int:
+    var my_count = 0
+    var opp_count = 0
+
+    for i in range(4):
+        var v = board.piece_at(row + i * delta_row, col + i * delta_col)
+        if v == 1:
+            my_count += 1
+        elif v == -1:
+            opp_count += 1
+    return window_score(my_count, opp_count)
+
 def heuristic(board: Bitboard) -> Int:
     var score = 0
 
-    for shift in [UInt64(1), STRIDE, STRIDE + 1, STRIDE - 1]:
-        var my_pairs = board.my_pieces & (board.my_pieces >> shift)
-        var opp_pairs = board.opp_pieces & (board.opp_pieces >> shift)
+    # Horizontal check
+    for row in range(0, HEIGHT):
+        for col in range(0, WIDTH - 3):
+            score += eval_window(board, row, col, delta_row = 0, delta_col = 1)
 
-        score += Int(pop_count(my_pairs))
-        score -= Int(pop_count(opp_pairs))
+    # Vertical check
+    for row in range(0, HEIGHT - 3):
+        for col in range(0, WIDTH):
+            score += eval_window(board, row, col, delta_row = 1, delta_col = 0)
 
-        var my_triples = my_pairs & (my_pairs >> shift)
-        var opp_triples = opp_pairs & (opp_pairs >> shift)
+    # Diagonal check (/)
+    for row in range(0, HEIGHT - 3):
+        for col in range(0, WIDTH - 3):
+            score += eval_window(board, row, col, delta_row = 1, delta_col = 1)
 
-        score += 4 * Int(pop_count(my_triples))
-        score -= 4 * Int(pop_count(opp_triples))
+    # Diagonal check (\)
+    for row in range(3, HEIGHT):
+        for col in range(0, WIDTH - 3):
+            score += eval_window(board, row, col, delta_row = -1, delta_col = 1)
+
 
     return score
