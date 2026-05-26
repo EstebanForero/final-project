@@ -1,4 +1,3 @@
-
 import numpy as np
 import random
 from connect4.policy import Policy
@@ -70,7 +69,7 @@ class MCTSNode:
 class DEPTHAgent(Policy):
     """True Monte Carlo Tree Search Agent for Connect-4 with deep tree exploration."""
 
-    def __init__(self, num_simulations: int = 500, max_depth: int = 42):
+    def __init__(self, num_simulations: int = 4000, max_depth: int = 42):
         self.num_simulations = num_simulations
         self.max_depth = max_depth
         self.c = math.sqrt(2)  # UCB exploration constant
@@ -127,14 +126,15 @@ class DEPTHAgent(Policy):
             for _ in range(self.num_simulations):
                 self._mcts_iteration(root, yo)
             
-            # Select best action from root children
+            # Selecciona la acción con el mejor valor medio (average reward)
             best_action = None
-            best_visits = -1
-            
+            best_avg = -float('inf')
             for action, child in root.children.items():
-                if child.visits > best_visits:
-                    best_visits = child.visits
-                    best_action = action
+                if child.visits > 0:
+                    avg = child.value / child.visits
+                    if avg > best_avg:
+                        best_avg = avg
+                        best_action = action
             
             if best_action is not None:
                 return int(best_action)
@@ -186,25 +186,17 @@ class DEPTHAgent(Policy):
             current = current.parent
 
     def _random_playout(self, state: ConnectState, player: int, current_depth: int = 0) -> float:
-        """Random playout from state to terminal, return reward from player's perspective."""
         current = state
-        depth = current_depth
-        
-        while not current.is_final() and depth < self.max_depth:
+        while not current.is_final():
             free_cols = current.get_free_cols()
             if not free_cols:
                 break
-            
             col = random.choice(free_cols)
             try:
-                current = current.transition(col)
-                depth += 1
+                    current = current.transition(col)
             except ValueError:
                 break
-        
         winner = current.get_winner()
-        
-        # Return reward from player's perspective
         if winner == 0:
             return 0.0
         elif winner == player:
