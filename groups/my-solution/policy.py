@@ -42,7 +42,7 @@ class OhYes(Policy):
 
         if self.timeout is not None:
             budget = self.timeout * 0.9
-            projected_next = elapsed * 7
+            projected_next = elapsed * 7.5
             if projected_next < budget:
                 self.search_depth += 2
 
