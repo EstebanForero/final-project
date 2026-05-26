@@ -16,7 +16,7 @@ import mojo.importer  # noqa: F401
 import solution  # isort: skip  — compiles solution.mojo automatically
 
 
-class OhYes(Policy):
+class NegamaxAdaptativeDeepening(Policy):
     def mount(self, timeout=None) -> None:
         self.timeout = timeout
         self.search_depth = 14  # change this to control how deep your search goes

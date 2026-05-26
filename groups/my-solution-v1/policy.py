@@ -16,7 +16,7 @@ import solution_v1 as solution  # isort: skip  — compiles solution_v1.mojo aut
 
 
 # class OhYes(Policy):
-class OhYes:
+class NegamaxHeuristics:
     def mount(self, timeout=None) -> None:
         self.timeout = timeout
         self.search_depth = 4  # change this to control how deep your search goes
