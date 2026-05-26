@@ -41,13 +41,7 @@ Actualiza las estadísticas de todos los nodos en el camino desde el expandido h
 
 ```
 numpy>=1.23
-pydantic>=2.0
-matplotlib>=3.0
-```
 
-Instalar con:
-```bash
-pip install numpy pydantic matplotlib
 ```
 
 ## Cómo Usar
@@ -69,7 +63,7 @@ from connect4.connect_state import ConnectState
 import numpy as np
 
 # Crear agente
-agent = DEPTHAgent(num_simulations=500, max_depth=42)
+agent = DEPTHAgent(num_simulations=4000, max_depth=42)
 agent.mount()
 
 # Crear estado inicial
@@ -85,7 +79,7 @@ print(f"Agente elige columna: {action}")
 
 | Parámetro | Valor Default | Descripción |
 |-----------|---------------|-------------|
-| `num_simulations` | 500 | Número de iteraciones MCTS por decisión |
+| `num_simulations` | 4000 | Número de iteraciones MCTS por decisión |
 | `max_depth` | 42 | Profundidad máxima del árbol (máximo movimientos posibles) |
 | `c` | √2 | Constante de exploración UCB1 |
 
