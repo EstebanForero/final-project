@@ -236,7 +236,7 @@ def window_score(window_me: Int32, window_opp: Int32) -> Int32:
     elif window_me == 2:
         return 3 # building thread for the enemy
     elif window_opp == 3:
-        return -10 # opponent one move from winning
+        return -8 # opponent one move from winning
     elif window_opp == 2:
         return 0 # we don't want to penalize just two in a row
     return 0
