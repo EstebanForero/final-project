@@ -7,8 +7,8 @@ from std.bit import pop_count
 from std.python.bindings import PythonTypeBuilder
 
 comptime WIDTH: UInt64  = 7
-comptime STRIDE: UInt64  = WIDTH + 1
 comptime HEIGHT: UInt64 = 6
+comptime STRIDE: UInt64  = WIDTH + 1
 
 # Used for negamax win or lose situations
 comptime BIG_SCORE: Int32 = 1000000
