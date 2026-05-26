@@ -63,16 +63,20 @@ def PyInit_solution() -> PythonObject:
 def select_best_move(board: Bitboard, depth: Int8, mut transposition_table: List[TTEntry]) -> Int:
     var action_max = -1
     var score_max = -Int32.MAX
+    var alpha = -Int32.MAX
 
     for col in COL_ORDER:
 
         if board.is_valid_move(col):
             var child = board.play(col)
-            var score = -negamax(child, depth - 1, -Int32.MAX, Int32.MAX, transposition_table)
+            var score = -negamax(child, depth - 1, -Int32.MAX, -alpha, transposition_table)
 
             if score > score_max:
                 score_max = score
                 action_max = col
+
+            if score > alpha:
+                alpha = score
 
     return action_max
 
