@@ -10,18 +10,15 @@ comptime WIDTH: UInt64  = 7
 comptime STRIDE: UInt64  = WIDTH + 1
 comptime HEIGHT: UInt64 = 6
 
-# In select best move
-comptime DEPTH: Int = 8
-
 # Used for negamax win or lose situations
-comptime BIG_SCORE: Int = 1000000
+comptime BIG_SCORE: Int32 = 1000000
 
 # Negamax to define order, first we try statistically stronger columns, from center to extremes
 comptime COL_ORDER: InlineArray[Int, Int(WIDTH)] = [3, 2, 4, 1, 5, 0, 6]
 
 # Transposition table constants
 
-comptime TT_SIZE = 262144 # 2^18
+comptime TT_SIZE = 1048576 # 2^20
 
 def full_board_mask() -> UInt64:
     var mask: UInt64 = 0
@@ -44,7 +41,7 @@ struct Agent(Defaultable, Movable, Writable):
     def act(self_ptr: UnsafePointer[Self, MutAnyOrigin], flat_board: PythonObject, depth_obj: PythonObject) raises -> PythonObject:
         #var self_ptr = py_self.downcast_value_ptr[Agent]()
         var board = from_flat_board(flat_board)
-        var depth = max(0, Int(py=depth_obj))
+        var depth = Int8(max(0, Int(py=depth_obj)))
         return select_best_move(board, depth, self_ptr[].tt)
 
     def __str__(self) -> String:
@@ -63,48 +60,49 @@ def PyInit_solution() -> PythonObject:
     except e:
         abort(String("error: ", e))
 
-def select_best_move(mut board: Bitboard, depth: Int, mut transposition_table: List[TTEntry]) -> Int:
+def select_best_move(board: Bitboard, depth: Int8, mut transposition_table: List[TTEntry]) -> Int:
     var action_max = -1
-    var score_max = -Int.MAX
+    var score_max = -Int32.MAX
+    var alpha = -Int32.MAX
 
     for col in COL_ORDER:
 
         if board.is_valid_move(col):
-            board.make_move(col)
-            var score = -negamax(board, depth - 1, -Int.MAX, Int.MAX, transposition_table)
-            board.undo_move(col)
+            var child = board.play(col)
+            var score = -negamax(child, depth - 1, -Int32.MAX, -alpha, transposition_table)
 
             if score > score_max:
                 score_max = score
                 action_max = col
 
+            if score > alpha:
+                alpha = score
+
     return action_max
 
 
-struct Bitboard(Movable):
+struct Bitboard(Copyable):
     var my_pieces: UInt64
     var opp_pieces: UInt64
-    var heights: InlineArray[UInt8, Int(WIDTH)]
+    var mask: UInt64
 
     def __init__(out self):
         self.my_pieces = 0
         self.opp_pieces = 0
-        self.heights = InlineArray[UInt8, Int(WIDTH)](fill=0)
+        self.mask = 0
+
+    def __init__(out self, my_pieces: UInt64, opp_pieces: UInt64, mask: UInt64):
+        self.my_pieces  = my_pieces
+        self.opp_pieces = opp_pieces
+        self.mask       = mask
 
     def is_valid_move(self, col: Int) -> Bool:
-        return self.heights[col] < UInt8(HEIGHT)
+        return (self.mask & _top_mask(col)) == 0
 
-    def make_move(mut self, col: Int):
-        var bit = UInt64(1) << (STRIDE * UInt64(col) + UInt64(self.heights[col]))
-        self.my_pieces |= bit
-        self.heights[col] += 1
-        (self.my_pieces, self.opp_pieces) = (self.opp_pieces, self.my_pieces)
-
-    def undo_move(mut self, col: Int):
-        (self.my_pieces, self.opp_pieces) = (self.opp_pieces, self.my_pieces)
-        self.heights[col] -= 1
-        var bit = UInt64(1) << (STRIDE * UInt64(col) + UInt64(self.heights[col]))
-        self.my_pieces &= ~bit
+    def play(self, col: Int) -> Bitboard:
+        var move_bit = (self.mask + _bottom_mask(col)) & _column_mask(col)
+        var new_mask = self.mask | move_bit
+        return Bitboard(self.opp_pieces, self.my_pieces | move_bit, new_mask)
 
     def check_win(self) -> Bool:
         return (
@@ -146,6 +144,15 @@ struct Bitboard(Movable):
         hash ^= hash >> 33
         return hash
 
+fn _bottom_mask(col: Int) -> UInt64:
+    return UInt64(1) << (UInt64(col) * STRIDE)
+
+fn _top_mask(col: Int) -> UInt64:
+    return UInt64(1) << (UInt64(col) * STRIDE + HEIGHT - 1)
+
+fn _column_mask(col: Int) -> UInt64:
+    return ((UInt64(1) << HEIGHT) - 1) << (UInt64(col) * STRIDE)
+
 
 def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
     var board = Bitboard()
@@ -159,23 +166,23 @@ def from_flat_board(flat_board: PythonObject) raises -> Bitboard:
 
             if value > 0.5:
                 board.my_pieces |= bit
-                board.heights[col] += 1
+                board.mask |= bit
             elif value < -0.5:
                 board.opp_pieces |= bit
-                board.heights[col] += 1
+                board.mask |= bit
 
     return board^
 
 
-def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int, mut transposition_table: List[TTEntry]) -> Int:
+def negamax(board: Bitboard, depth: Int8, alpha: Int32, beta: Int32, mut transposition_table: List[TTEntry]) -> Int32:
     if board.check_win_opp():
-        return -(BIG_SCORE + depth)
+        return -(BIG_SCORE + Int32(depth))
     elif board.is_draw():
         return 0
     elif depth == 0:
         return heuristic(board)
 
-    var best_score = -(BIG_SCORE + depth)
+    var best_score = -(BIG_SCORE + Int32(depth))
 
     var local_alpha = alpha
     var local_beta = beta
@@ -201,9 +208,8 @@ def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int, mut transpos
 
     for col in COL_ORDER:
         if board.is_valid_move(col):
-            board.make_move(col)
-            var score = -negamax(board, depth - 1, -local_beta, -local_alpha, transposition_table)
-            board.undo_move(col)
+            var child = board.play(col)
+            var score = -negamax(child, depth - 1, -local_beta, -local_alpha, transposition_table)
 
             if score > best_score:
                 best_score = score
@@ -222,22 +228,22 @@ def negamax(mut board: Bitboard, depth: Int, alpha: Int, beta: Int, mut transpos
 
     return best_score
 
-def window_score(window_me: Int, window_opp: Int) -> Int:
+def window_score(window_me: Int32, window_opp: Int32) -> Int32:
     if window_me > 0 and window_opp > 0:
         return 0 # Nobody can wi in there since the opponent already has pieces
     elif window_me == 3:
-        return 5 # strong thread, one move from winning
+        return 9 # strong thread, one move from winning
     elif window_me == 2:
-        return 2 # building thread for the enemy
+        return 3 # building thread for the enemy
     elif window_opp == 3:
-        return -4 # opponent one move from winning
+        return -10 # opponent one move from winning
     elif window_opp == 2:
-        return -1 # opponent building winning move
+        return 0 # we don't want to penalize just two in a row
     return 0
 
-def eval_window(board: Bitboard, row: Int, col: Int, delta_row: Int, delta_col: Int) -> Int:
-    var my_count = 0
-    var opp_count = 0
+def eval_window(board: Bitboard, row: Int, col: Int, delta_row: Int, delta_col: Int) -> Int32:
+    var my_count: Int32 = 0
+    var opp_count: Int32 = 0
 
     for i in range(4):
         var v = board.piece_at(row + i * delta_row, col + i * delta_col)
@@ -247,8 +253,8 @@ def eval_window(board: Bitboard, row: Int, col: Int, delta_row: Int, delta_col: 
             opp_count += 1
     return window_score(my_count, opp_count)
 
-def heuristic(board: Bitboard) -> Int:
-    var score = 0
+def heuristic(board: Bitboard) -> Int32:
+    var score: Int32 = 0
 
     # Horizontal check
     for row in range(0, HEIGHT):
@@ -277,8 +283,8 @@ def heuristic(board: Bitboard) -> Int:
 
 struct TTEntry(ImplicitlyCopyable, Movable, Writable):
     var hash: UInt64
-    var score: Int
-    var depth: Int
+    var score: Int32
+    var depth: Int8
     var flag: UInt8
 
     def __init__(out self):
@@ -287,8 +293,9 @@ struct TTEntry(ImplicitlyCopyable, Movable, Writable):
         self.depth =0
         self.flag = 0
 
-    def __init__(out self, key: UInt64, score: Int, depth: Int, flag: UInt8):
-        self.hash   = key
+    def __init__(out self, key: UInt64, score: Int32, depth: Int8, flag: UInt8):
+        self.hash = key
         self.score = score
         self.depth = depth
         self.flag  = flag
+
