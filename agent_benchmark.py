@@ -3,6 +3,7 @@ from __future__ import annotations
 import itertools
 import importlib.util
 import argparse
+import inspect
 import math
 import multiprocessing as mp
 import json
@@ -197,7 +198,20 @@ def load_agent_class_from_spec(
         except ValueError:
             pass
 
-    agent_cls = getattr(module, spec_data["class_name"])
+    agent_cls = getattr(module, spec_data["class_name"], None)
+    if agent_cls is None:
+        candidates = [
+            obj
+            for _, obj in inspect.getmembers(module, inspect.isclass)
+            if obj is not Policy and issubclass(obj, Policy) and obj.__module__ == module.__name__
+        ]
+        if len(candidates) != 1:
+            candidate_names = [candidate.__name__ for candidate in candidates]
+            raise AttributeError(
+                f"Could not find class {spec_data['class_name']!r} in {policy_dir / 'policy.py'} "
+                f"and found Policy candidates {candidate_names!r}"
+            )
+        agent_cls = candidates[0]
     if not issubclass(agent_cls, Policy):
         raise TypeError(f"Loaded class {agent_cls!r} is not a Policy")
     return agent_cls, work_dirs
