@@ -232,13 +232,13 @@ def window_score(window_me: Int32, window_opp: Int32) -> Int32:
     if window_me > 0 and window_opp > 0:
         return 0 # Nobody can wi in there since the opponent already has pieces
     elif window_me == 3:
-        return 5 # strong thread, one move from winning
+        return 9 # strong thread, one move from winning
     elif window_me == 2:
-        return 2 # building thread for the enemy
+        return 3 # building thread for the enemy
     elif window_opp == 3:
-        return -4 # opponent one move from winning
+        return -10 # opponent one move from winning
     elif window_opp == 2:
-        return -1 # opponent building winning move
+        return 0 # we don't want to penalize just two in a row
     return 0
 
 def eval_window(board: Bitboard, row: Int, col: Int, delta_row: Int, delta_col: Int) -> Int32:
