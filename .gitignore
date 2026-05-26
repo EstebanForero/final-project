@@ -7,3 +7,6 @@ __pycache__/
 *.pyc
 
 q_values
+
+# Report artifacts — not tracked in git
+document/
