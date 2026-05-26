@@ -15,7 +15,6 @@ import mojo.importer  # noqa: F401
 import solution_v1 as solution  # isort: skip  — compiles solution_v1.mojo automatically
 
 
-# class OhYes(Policy):
 class NegamaxHeuristics:
     def mount(self, timeout=None) -> None:
         self.timeout = timeout
