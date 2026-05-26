@@ -26,18 +26,7 @@ class RolloutAgent(Policy):
         if not columnas_libres:
             return 0
 
-        # --- FILTRO 1: Búsqueda Greedy de Victoria ---
-    
-        for col in columnas_libres:
-            try:
-                if estado_actual.transition(col).get_winner() == yo:
-                    return col
-            except ValueError:
-                continue
 
-        # --- FILTRO 2: Intercepción Analítica de Amenazas (Bloqueo) ---
-        # Concepto: Ensayos Guiados para recompensas escasas 
-        # Multiplicar por -1 crea un espejo para evaluar al rival de forma segura
         try:
             tablero_espejo = s * -1
             estado_rival = ConnectState(board=tablero_espejo, player=yo)
